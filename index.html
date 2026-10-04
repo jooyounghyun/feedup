@@ -174,6 +174,7 @@ textarea{min-height:88px}
 .tags h4{margin:14px 0 8px;font-size:13px;font-weight:700}
 .tag{height:34px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--card);font-size:13.5px;font-weight:500;margin:0 6px 6px 0}
 .tag.on{background:var(--flag);border-color:var(--flag);color:#fff;font-weight:700}
+.tag.good.on{background:var(--green);border-color:var(--green)}
 
 .editbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:25;background:var(--paper);display:flex;justify-content:space-between;align-items:center;padding:12px 18px;max-width:560px;margin:0 auto}
 .editbar .t{font-weight:700}
@@ -342,6 +343,7 @@ const MISS={
   '퍼팅':['롱퍼트','미들퍼트','숏퍼트','오르막 퍼트','내리막 퍼트','거리감','라이 보기','헤드업','집중도 부족']
 };
 const FIELD={id:'golf',label:'GOLF'};
+const GOOD='굿샷';
 const COLS=['profiles','links','codes','drills','logs','rounds','feedback','reports'];
 const WD=['일','월','화','수','목','금','토'];
 const I={
@@ -657,7 +659,9 @@ function vRoundEdit(){
     const notes=r.holes.map((hh,i)=>hh.note?'<div class="miss"><span>'+(i+1)+'번 홀</span><span class="muted" style="text-align:right">'+esc(hh.note)+'</span></div>':'').join('');
     if(notes)x+='<h2>샷 메모</h2><div class="card">'+notes+'</div>';
   }
-  x+='<h2>미스 샷 원인 <small>'+(r.misses||[]).length+'개 선택</small></h2><div class="tags">';
+  const gOn=(r.misses||[]).includes(GOOD);
+  x+='<h2>미스 샷 원인 <small>'+(r.misses||[]).filter(m=>m!==GOOD).length+'개 선택</small></h2><div class="tags">';
+  x+='<h4>성공</h4><button class="tag good'+(gOn?' on':'')+'" data-act="miss" data-v="'+GOOD+'"'+(ro?' disabled':'')+' aria-pressed="'+gOn+'">굿샷</button>';
   Object.keys(MISS).forEach(cat=>{
     x+='<h4>'+cat+'</h4>'+MISS[cat].map(m=>{const k=cat+':'+m,on=(r.misses||[]).includes(k);return '<button class="tag'+(on?' on':'')+'" data-act="miss" data-v="'+esc(k)+'"'+(ro?' disabled':'')+'>'+m+'</button>';}).join('');
   });
@@ -692,13 +696,13 @@ function compute(p){
   const full=st.filter(s=>s.n===18);
   const rnd={count:rounds.length,avg:full.length?(full.reduce((a,s)=>a+s.tot,0)/full.length).toFixed(1):null,
     putt:st.length?(sum('putt')/sum('n')*18).toFixed(1):null,fw:pct(sum('fw'),sum('fwN')),gir:pct(sum('gir'),sum('n')),rec:pct(sum('rec'),sum('recN')),has:st.length>0};
-  const mc={};rounds.forEach(r=>(r.misses||[]).forEach(m=>{mc[m]=(mc[m]||0)+1;}));
+  const mc={};let goodN=0;rounds.forEach(r=>(r.misses||[]).forEach(m=>{if(m===GOOD){goodN++;return;}mc[m]=(mc[m]||0)+1;}));
   const misses=Object.entries(mc).sort((a,b)=>b[1]-a[1]);
   const fbs=[];
   pdays.forEach(x=>fbsFor('log',logId(p,x.d),p).forEach(f=>fbs.push(Object.assign({},f,{type:'연습',memo:x.L.memo||''}))));
   rounds.forEach(r=>fbsFor('round',r.id,p).forEach(f=>fbs.push(Object.assign({},f,{type:'라운드',memo:r.memo||''}))));
   fbs.sort((a,b)=>a.date.localeCompare(b.date));
-  return{R,daily,pastN:pdays.length,completion,active,perDrill,rounds,rnd,misses,fbs,items};
+  return{R,daily,pastN:pdays.length,completion,active,perDrill,rounds,rnd,misses,fbs,items,goodN};
 }
 function reportPlayer(){
   if(S.mode!=='coach')return ME;
@@ -732,6 +736,7 @@ function vReport(){
   h+='<h2>라운드 <small>'+C.rnd.count+'회</small></h2>';
   if(C.rnd.has){
     h+='<div class="kpis" style="margin-top:0"><div class="kpi"><div class="v num">'+(C.rnd.avg||'–')+'</div><div class="l">평균 스코어 (18홀)</div></div><div class="kpi"><div class="v num">'+C.rnd.putt+'</div><div class="l">18홀 기준 평균 퍼트</div></div><div class="kpi"><div class="v num">'+C.rnd.fw+'<small>%</small></div><div class="l">페어웨이 안착률</div></div><div class="kpi"><div class="v num">'+C.rnd.gir+'<small>%</small></div><div class="l">그린 적중률</div></div></div>';
+    if(C.goodN)h+='<h2>굿샷</h2><div class="card" style="padding:4px 16px"><div class="miss"><span>굿샷을 체크한 라운드</span><b style="color:var(--green)">'+C.goodN+'회</b></div></div>';
     if(C.misses.length)h+='<h2>자주 나온 미스 원인</h2><div class="card" style="padding:4px 16px">'+C.misses.slice(0,6).map(m=>'<div class="miss"><span>'+esc(m[0].replace(':',' / '))+'</span><b>'+m[1]+'회</b></div>').join('')+'</div>';
   }else h+='<div class="empty">이 기간에 기록한 라운드가 없어요.</div>';
   h+='<h2>'+(coach?'피드백':'받은 피드백')+' <small>'+C.fbs.length+'개</small></h2>';
@@ -765,6 +770,7 @@ async function demoSummary(C,coach){
   const good=drills.filter(x=>x.pc>=50).slice(0,2).map(x=>'• '+x.name+' '+x.days+'/'+C.pastN+'일('+x.pc+'%) 꾸준히 했어요.');
   if(R.has&&R.fw>=50)good.push('• 페어웨이 안착률 '+R.fw+'%로 티샷이 안정적이에요.');
   if(R.has&&R.gir>=40)good.push('• 그린 적중률 '+R.gir+'%로 아이언 샷이 잘 맞고 있어요.');
+  if(C.goodN)good.push('• 라운드 '+C.rounds.length+'회 중 '+C.goodN+'회 굿샷 느낌을 남겼어요.');
   if(!good.length)good.push('• 기록을 시작한 것 자체가 좋은 출발이에요. 매일 체크하는 습관부터 만들어 봐요.');
   L.push(...good.slice(0,3));
   L.push('','보완할 점');
@@ -849,7 +855,8 @@ function vInbox(){
       const s=rs(it.o);
       b='<div class="body"><b>'+esc(it.o.course||'코스 미입력')+'</b> <b class="num'+(s.vs<0?' under':'')+'" style="font-size:22px">'+(s.tot||'–')+' '+(s.n?vsPar(s.vs):'')+'</b><div class="muted" style="font-size:13px">FW '+s.fw+'/'+s.fwN+', GIR '+s.gir+'/'+s.n+', 퍼트 '+s.putt+'</div>'+
         '<div class="mini">'+it.o.holes.slice(0,9).map(shape).join('')+'</div><div class="mini">'+it.o.holes.slice(9).map(shape).join('')+'</div>'+
-        ((it.o.misses||[]).length?'<div class="muted" style="font-size:13px;margin-top:8px">미스 원인: '+esc(it.o.misses.map(m=>m.split(':')[1]).join(', '))+'</div>':'')+
+        ((it.o.misses||[]).includes(GOOD)?'<div style="font-size:13px;margin-top:8px;color:var(--green);font-weight:700">굿샷 체크</div>':'')+
+        ((it.o.misses||[]).filter(m=>m!==GOOD).length?'<div class="muted" style="font-size:13px;margin-top:8px">미스 원인: '+esc(it.o.misses.filter(m=>m!==GOOD).map(m=>m.split(':')[1]).join(', '))+'</div>':'')+
         (it.o.memo?'<div class="memo">'+esc(it.o.memo)+'</div>':'')+'</div>';
     }
     const others=fbsFor(it.kind,it.id,it.p).filter(f=>f.coachId!==ME);
