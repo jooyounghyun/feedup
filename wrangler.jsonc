@@ -1,0 +1,14 @@
+{
+  "name": "feedup",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "public", "binding": "ASSETS" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "feedup-db",
+      "database_id": "9c4bb876-4b1f-47ff-8f96-fb919be1524a"
+    }
+  ],
+  "observability": { "enabled": true }
+}
