@@ -179,8 +179,9 @@ textarea{min-height:88px}
 .kpi .l{font-size:12.5px;color:var(--muted);margin-top:4px}
 .tags h4{margin:14px 0 8px;font-size:13px;font-weight:700}
 .tag{height:34px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--card);font-size:13.5px;font-weight:500;margin:0 6px 6px 0}
-.tag.on{background:var(--flag);border-color:var(--flag);color:#fff;font-weight:700}
-.tag.good.on{background:var(--green);border-color:var(--green)}
+.tag.on{background:var(--under);border-color:var(--under);color:#fff;font-weight:700}
+.tag.good{color:var(--green);border-color:var(--green);font-weight:800}
+.tag.good.on{background:var(--green);border-color:var(--green);color:#fff}
 
 .editbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:25;background:var(--paper);display:flex;justify-content:space-between;align-items:center;padding:12px 18px;max-width:560px;margin:0 auto}
 .editbar .t{font-weight:700}
@@ -196,7 +197,7 @@ textarea{min-height:88px}
 .pnav button{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--card);display:grid;place-items:center}
 .pnav button svg{width:16px;height:16px}
 .bars{display:flex;align-items:flex-end;gap:3px;height:80px;padding-top:6px}
-.bars div{flex:1;background:var(--line);border-radius:3px 3px 0 0;position:relative;min-height:3px}
+.bars div{flex:1;height:100%;background:var(--green-2);border-radius:3px 3px 0 0;position:relative;min-height:3px}
 .bars div b{position:absolute;left:0;right:0;bottom:0;background:var(--green);border-radius:3px 3px 0 0}
 .bars div.fut{opacity:.35}
 .barlbl{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px;font-family:'Barlow Condensed',sans-serif}
@@ -208,7 +209,7 @@ textarea{min-height:88px}
 .hbar .track b{display:block;height:100%;background:var(--green)}
 .miss{display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
 .miss:first-child{border-top:0}
-.miss b{font-family:'Barlow Condensed',sans-serif;font-size:18px;color:var(--flag)}
+.miss b{font-family:'Barlow Condensed',sans-serif;font-size:18px;color:var(--under)}
 .ai{background:var(--ink);color:var(--on-ink);border-radius:16px;padding:18px;margin-top:10px}
 .ai h3{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:8px}
 .ai h3 svg{width:18px;height:18px}
@@ -387,6 +388,8 @@ const MISS={
 };
 const FIELD={id:'golf',label:'GOLF'};
 const GOOD='굿샷';
+const isGood=m=>m===GOOD||/:굿$/.test(m);
+const goodCat=m=>m===GOOD?'기타':m.split(':')[0];
 const COLS=['profiles','links','codes','drills','logs','rounds','feedback','reports','lessons','parents','pcodes'];
 const LESSON_TOPICS=['스윙','숏게임','퍼팅','코스 매니지먼트','멘탈'];
 const WD=['일','월','화','수','목','금','토'];
@@ -751,11 +754,11 @@ function vRoundEdit(){
     const notes=r.holes.map((hh,i)=>hh.note?'<div class="miss"><span>'+(i+1)+'번 홀</span><span class="muted" style="text-align:right">'+esc(hh.note)+'</span></div>':'').join('');
     if(notes)x+='<h2>샷 메모</h2><div class="card">'+notes+'</div>';
   }
-  const gOn=(r.misses||[]).includes(GOOD);
-  x+='<h2>미스 샷 원인 <small>'+(r.misses||[]).filter(m=>m!==GOOD).length+'개 선택</small></h2><div class="tags">';
-  x+='<h4>성공</h4><button class="tag good'+(gOn?' on':'')+'" data-act="miss" data-v="'+GOOD+'"'+(ro?' disabled':'')+' aria-pressed="'+gOn+'">굿샷</button>';
+  const ms=r.misses||[],gN=ms.filter(isGood).length,mN=ms.length-gN;
+  x+='<h2>샷 분석 <small>굿 '+gN+'개, 미스 '+mN+'개</small></h2><div class="tags">';
   Object.keys(MISS).forEach(cat=>{
-    x+='<h4>'+cat+'</h4>'+MISS[cat].map(m=>{const k=cat+':'+m,on=(r.misses||[]).includes(k);return '<button class="tag'+(on?' on':'')+'" data-act="miss" data-v="'+esc(k)+'"'+(ro?' disabled':'')+'>'+m+'</button>';}).join('');
+    const gk=cat+':굿',gon=ms.includes(gk);
+    x+='<h4>'+cat+'</h4><button class="tag good'+(gon?' on':'')+'" data-act="miss" data-v="'+esc(gk)+'"'+(ro?' disabled':'')+' aria-pressed="'+gon+'">굿</button>'+MISS[cat].map(m=>{const k=cat+':'+m,on=(r.misses||[]).includes(k);return '<button class="tag'+(on?' on':'')+'" data-act="miss" data-v="'+esc(k)+'"'+(ro?' disabled':'')+'>'+m+'</button>';}).join('');
   });
   x+='</div>';
   x+='<h2>라운드 메모</h2><textarea data-field="r-memo" placeholder="코스 컨디션, 느낀 점"'+(ro?' disabled':'')+'>'+esc(r.memo||'')+'</textarea>';
@@ -792,14 +795,15 @@ function compute(p){
   const tc={};lessons.forEach(l=>(l.topics||[]).forEach(x=>{tc[x]=(tc[x]||0)+1;}));
   const rounds=allRounds().filter(r=>r.playerId===p&&r.date>=R.s&&r.date<=R.e).sort((a,b)=>a.date.localeCompare(b.date));
   const rnd=rstat(rounds),rp=rstat(rounds.filter(r=>KIND(r)!=='match')),rm=rstat(rounds.filter(r=>KIND(r)==='match'));
-  const mc={};let goodN=0;rounds.forEach(r=>(r.misses||[]).forEach(m=>{if(m===GOOD){goodN++;return;}mc[m]=(mc[m]||0)+1;}));
+  const mc={},gc={};let goodN=0;rounds.forEach(r=>(r.misses||[]).forEach(m=>{if(isGood(m)){goodN++;const c=goodCat(m);gc[c]=(gc[c]||0)+1;return;}mc[m]=(mc[m]||0)+1;}));
+  const goods=Object.keys(MISS).concat(['기타']).filter(c=>gc[c]).map(c=>[c,gc[c]]);
   const misses=Object.entries(mc).sort((a,b)=>b[1]-a[1]);
   const fbs=[];
   pdays.forEach(x=>fbsFor('log',logId(p,x.d),p).forEach(f=>fbs.push(Object.assign({},f,{type:'연습',memo:x.L.memo||''}))));
   lessons.forEach(l=>fbsFor('lesson',l.id,p).forEach(f=>fbs.push(Object.assign({},f,{type:'레슨',memo:l.content||''}))));
   rounds.forEach(r=>fbsFor('round',r.id,p).forEach(f=>fbs.push(Object.assign({},f,{type:KIND(r)==='match'?'시합':'라운드',memo:r.memo||''}))));
   fbs.sort((a,b)=>a.date.localeCompare(b.date));
-  return{R,daily,pastN:pdays.length,completion,active,perDrill,rounds,rnd,rp,rm,misses,fbs,items:base,goodN,lessons,topics:Object.entries(tc).sort((a,b)=>b[1]-a[1]),hw:{done:hwDone,tot:hwTot}};
+  return{R,daily,pastN:pdays.length,completion,active,perDrill,rounds,rnd,rp,rm,misses,fbs,items:base,goodN,goods,lessons,topics:Object.entries(tc).sort((a,b)=>b[1]-a[1]),hw:{done:hwDone,tot:hwTot}};
 }
 function reportPlayer(){
   if(S.mode==='parent'){const ks=childrenOf(ME);if(!ks.includes(S.child))S.child=ks[0]||null;return S.child;}
@@ -852,7 +856,10 @@ function vReport(){
       const X=C.rp.has?C.rp:C.rm;
       h+='<div class="kpis" style="margin-top:0"><div class="kpi"><div class="v num">'+(X.avg||'–')+'</div><div class="l">평균 스코어 (18홀, '+(C.rp.has?'연습':'시합')+')</div></div><div class="kpi"><div class="v num">'+X.putt+'</div><div class="l">18홀 기준 평균 퍼트</div></div><div class="kpi"><div class="v num">'+X.fw+'<small>%</small></div><div class="l">페어웨이 안착률</div></div><div class="kpi"><div class="v num">'+X.gir+'<small>%</small></div><div class="l">그린 적중률</div></div></div>';
     }
-    if(C.goodN)h+='<h2>굿샷</h2><div class="card" style="padding:4px 16px"><div class="miss"><span>굿샷을 체크한 라운드</span><b style="color:var(--green)">'+C.goodN+'회</b></div></div>';
+    if(C.goodN){
+      const mx=Math.max(...C.goods.map(x=>x[1]));
+      h+='<h2>굿 <small>총 '+C.goodN+'개</small></h2><div class="card" style="padding:6px 16px">'+C.goods.map(x=>'<div class="hbar"><span class="nm">'+esc(x[0])+'</span><span class="p num" style="color:var(--green)">'+x[1]+'</span><div class="track"><b style="width:'+Math.round(x[1]/mx*100)+'%"></b></div></div>').join('')+'</div>';
+    }
     if(C.misses.length)h+='<h2>자주 나온 미스 원인</h2><div class="card" style="padding:4px 16px">'+C.misses.slice(0,6).map(m=>'<div class="miss"><span>'+esc(m[0].replace(':',' / '))+'</span><b>'+m[1]+'회</b></div>').join('')+'</div>';
   }else h+='<div class="empty">이 기간에 기록한 라운드가 없어요.</div>';
   h+='<h2>'+(coach?'피드백':'받은 피드백')+' <small>'+C.fbs.length+'개</small></h2>';
@@ -889,7 +896,7 @@ async function demoSummary(C,coach){
   if(R.has&&R.fw>=50)good.push('• 페어웨이 안착률 '+R.fw+'%로 티샷이 안정적이에요.');
   if(R.has&&R.gir>=40)good.push('• 그린 적중률 '+R.gir+'%로 아이언 샷이 잘 맞고 있어요.');
   if(C.hw.tot&&pct(C.hw.done,C.hw.tot)>=70)good.push('• 레슨 숙제를 '+pct(C.hw.done,C.hw.tot)+'% 해냈어요.');
-  if(C.goodN)good.push('• 라운드 '+C.rounds.length+'회 중 '+C.goodN+'회 굿샷 느낌을 남겼어요.');
+  if(C.goodN)good.push('• 라운드에서 굿을 '+C.goodN+'개 남겼어요('+C.goods.map(x=>x[0]+' '+x[1]).join(', ')+').');
   if(!good.length)good.push('• 기록을 시작한 것 자체가 좋은 출발이에요. 매일 체크하는 습관부터 만들어 봐요.');
   L.push(...good.slice(0,3));
   L.push('','보완할 점');
@@ -925,8 +932,8 @@ async function runAI(){
     항목별체크일수:C.perDrill.map(x=>'['+x.group+'] '+x.name+': '+x.days+'/'+C.pastN),
     일별:C.daily.filter(x=>!x.fut&&(x.done||x.L.memo)).map(x=>({날짜:x.d,완료:x.done+'/'+C.items.length,빠진항목:C.items.filter(i=>!isChk(x.L,i)).map(i=>i.name),메모:x.L.memo||''})),
     레슨:C.lessons.map(l=>({날짜:l.date,코치:lessonCoach(l),주제:l.topics||[],내용:l.content,숙제:hwLines(l),사진영상수:(l.media||[]).length,코치피드백:fbsFor('lesson',l.id,l.playerId).map(f=>f.text)})),숙제수행:C.hw.done+'/'+C.hw.tot,
-    라운드:C.rounds.map(r=>{const s=rs(r);return{종류:KIND(r)==='match'?'시합':'연습',대회:KIND(r)==='match'?r.match:null,날짜:r.date,코스:r.course,홀수:s.n,스코어:s.tot,파대비:vsPar(s.vs),퍼트:s.putt,페어웨이:s.fw+'/'+s.fwN,GIR:s.gir+'/'+s.n,리커버리:s.rec+'/'+s.recN,미스원인:r.misses||[],메모:r.memo||'',샷메모:r.holes.map((h,i)=>h.note?(i+1)+'번홀 '+h.note:'').filter(Boolean)};}),
-    라운드평균:{연습:C.rp,시합:C.rm},미스원인빈도:C.misses,
+    라운드:C.rounds.map(r=>{const s=rs(r);return{종류:KIND(r)==='match'?'시합':'연습',대회:KIND(r)==='match'?r.match:null,날짜:r.date,코스:r.course,홀수:s.n,스코어:s.tot,파대비:vsPar(s.vs),퍼트:s.putt,페어웨이:s.fw+'/'+s.fwN,GIR:s.gir+'/'+s.n,리커버리:s.rec+'/'+s.recN,굿:(r.misses||[]).filter(isGood).map(goodCat),미스원인:(r.misses||[]).filter(m=>!isGood(m)),메모:r.memo||'',샷메모:r.holes.map((h,i)=>h.note?(i+1)+'번홀 '+h.note:'').filter(Boolean)};}),
+    라운드평균:{연습:C.rp,시합:C.rm},굿빈도:C.goods,미스원인빈도:C.misses,
     피드백:C.fbs.map(f=>({날짜:f.date,종류:f.type,작성:f.coachId===ME?'나':cName(f.coachId)+'',내용:f.text}))
   };
   const who=coach?'이 리포트를 보는 사람은 이 선수의 코치('+pName(ME)+')야. "작성: 나"인 피드백과 "[내가 배정한 항목]"을 중심으로, 이 코치가 다음에 무엇을 지도하면 좋을지 관점에서 정리해.':parent?'이 리포트를 보는 사람은 선수의 학부모야. 전문 용어를 줄이고, 아이가 잘한 점과 집에서 응원할 방법 위주로 따뜻하게 정리해.':'이 리포트를 보는 사람은 선수 본인이야. 여러 코치의 피드백을 합쳐서, 공통으로 지적된 점과 코치별 강조점을 구분해 정리해.';
@@ -982,8 +989,8 @@ function vInbox(){
       const s=rs(it.o);
       b='<div class="body">'+kindBadge(it.o)+' <b>'+esc(rTitle(it.o))+'</b> <b class="num'+(s.vs<0?' under':'')+'" style="font-size:22px">'+(s.tot||'–')+' '+(s.n?vsPar(s.vs):'')+'</b><div class="muted" style="font-size:13px">FW '+s.fw+'/'+s.fwN+', GIR '+s.gir+'/'+s.n+', 퍼트 '+s.putt+'</div>'+
         '<div class="mini">'+it.o.holes.slice(0,9).map(shape).join('')+'</div><div class="mini">'+it.o.holes.slice(9).map(shape).join('')+'</div>'+
-        ((it.o.misses||[]).includes(GOOD)?'<div style="font-size:13px;margin-top:8px;color:var(--green);font-weight:700">굿샷 체크</div>':'')+
-        ((it.o.misses||[]).filter(m=>m!==GOOD).length?'<div class="muted" style="font-size:13px;margin-top:8px">미스 원인: '+esc(it.o.misses.filter(m=>m!==GOOD).map(m=>m.split(':')[1]).join(', '))+'</div>':'')+
+        ((it.o.misses||[]).some(isGood)?'<div style="font-size:13px;margin-top:8px;color:var(--green);font-weight:700">굿: '+esc(it.o.misses.filter(isGood).map(goodCat).join(', '))+'</div>':'')+
+        ((it.o.misses||[]).filter(m=>!isGood(m)).length?'<div class="muted" style="font-size:13px;margin-top:8px">미스 원인: '+esc(it.o.misses.filter(m=>!isGood(m)).map(m=>m.split(':')[1]).join(', '))+'</div>':'')+
         (it.o.memo?'<div class="memo">'+esc(it.o.memo)+'</div>':'')+'</div>';
     }
     const others=fbsFor(it.kind,it.id,it.p).filter(f=>f.coachId!==ME);
