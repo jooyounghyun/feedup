@@ -115,7 +115,7 @@ textarea{min-height:88px}
 .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:52px;border-radius:12px;background:var(--ink);color:var(--on-ink);font-weight:700;font-size:16px;margin-top:14px}
 .btn.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
 .btn.sm{height:42px;font-size:14px;width:auto;padding:0 16px;margin:0}
-.btn.danger{background:transparent;color:var(--flag);border:1.5px solid var(--flag-2)}
+.btn.danger{background:transparent;color:#E0322A;border:1.5px solid #F5C2BE}
 .btn[disabled]{opacity:.5;cursor:default}
 .status{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);margin-top:12px}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--sand)}
@@ -349,6 +349,27 @@ label.mitem{cursor:pointer;border:1.5px dashed var(--line);background:var(--card
 .viewer img,.viewer video{max-width:100%;max-height:100%;border-radius:8px}
 .vclose{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:12px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;display:grid;place-items:center}
 .vclose svg{width:20px;height:20px}
+.agwrap{margin-top:24px;border-top:1px solid #E4E7EC;padding-top:12px}
+.agrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.agck{display:flex;align-items:center;gap:10px;padding:9px 0;font-size:14.5px;font-weight:600;color:#0B0B0C;text-align:left}
+.agck.agall{font-weight:900;font-size:15.5px;padding:6px 0 10px;border-bottom:1px solid #E4E7EC;width:100%;margin-bottom:4px}
+.agbox{width:22px;height:22px;border-radius:6px;border:2px solid #D0D5DD;display:grid;place-items:center;flex:none;transition:all .15s}
+.agbox svg{width:14px;height:14px;color:#fff;opacity:0}
+.agck.on .agbox{background:#0B0B0C;border-color:#0B0B0C}
+.agck.on .agbox svg{opacity:1}
+.agview{font-size:13px;color:#8E8E93;text-decoration:underline;padding:6px 2px;flex:none}
+.agage{display:flex;gap:8px;margin-top:10px}
+.agage button{flex:1;height:44px;border-radius:10px;border:1.5px solid #E4E7EC;font-weight:700;font-size:14px;color:#667085;background:#fff}
+.agage button.on{border-color:#0B0B0C;color:#0B0B0C;background:#F3F4F6}
+.agg{margin-top:12px;background:#F6F7F9;border-radius:12px;padding:12px}
+.agg p{margin:0 0 8px;font-size:13px;color:#667085;font-weight:600}
+.agg input{height:48px}
+.onb .foot button{font:inherit;color:inherit}
+.tview{position:fixed;inset:0;z-index:95;background:#fff;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px)}
+.tbar{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-bottom:1px solid #E4E7EC;color:#111418}
+.tbar button{font-weight:800;color:#1F5EFF;padding:6px}
+.tview iframe{flex:1;border:0;width:100%}
+.bizinfo{margin-top:24px;font-size:11.5px;color:var(--muted);line-height:1.7;text-align:center}
 .fbo{font-size:12.5px;color:var(--muted);margin-top:8px}
 </style>
 </head>
@@ -390,7 +411,8 @@ const FIELD={id:'golf',label:'GOLF'};
 const GOOD='굿샷';
 const isGood=m=>m===GOOD||/:굿$/.test(m);
 const goodCat=m=>m===GOOD?'기타':m.split(':')[0];
-const COLS=['profiles','links','codes','drills','logs','rounds','feedback','reports','lessons','parents','pcodes'];
+const COLS=['profiles','links','codes','drills','logs','rounds','feedback','reports','lessons','parents','pcodes','consents'];
+const TERMS_VERSION='2026-10-draft';
 const LESSON_TOPICS=['스윙','숏게임','퍼팅','코스 매니지먼트','멘탈'];
 const WD=['일','월','화','수','목','금','토'];
 const I={
@@ -490,7 +512,7 @@ const S={
   reportPlayer:null,inboxFilter:'pending',inboxPlayer:'all',
   round:null,roundRO:false,roundSnap:null,hole:0,
   lesson:null,lessonSnap:null,mediaMsg:'',upMsg:'',uploading:0,newKeys:[],viewer:null,rkind:'all',lessonPlayer:'all',child:null,
-  loading:true,drafts:{},dd:{},dlg:null,defaultName:'',authMode:'login',authBusy:false,authErr:'',
+  loading:true,drafts:{},dd:{},dlg:null,defaultName:'',ag:{},termsView:null,withdraw:false,authMode:'login',authBusy:false,authErr:'',
   ai:{busy:false,key:null,text:''}
 };
 
@@ -518,7 +540,7 @@ function hwGroups(p,d){
   if(!d)return[];
   const by={};
   allLessons().forEach(l=>{
-    if(l.playerId!==p||!hwLines(l).length||l.date>d||addD(l.date,14)<d)return;
+    if(l.playerId!==p||!hwLines(l).length||l.date>d||addD(l.date,6)<d)return;
     const k=l.coachId||'self',b=by[k];
     if(!b||b.date<l.date||(b.date===l.date&&(b.createdAt||0)<(l.createdAt||0)))by[k]=l;
   });
@@ -603,6 +625,7 @@ function render(){
   let html;
   if(!USER){html=vAuth();}
   else if(!prof(ME)){html=vOnboard();}
+  else if(!(Store.data.consents[ME]&&Store.data.consents[ME].version===TERMS_VERSION)){html=vConsent();}
   else{
     if(S.mode==='coach'&&!coachEnabled())S.mode='player';
     if(S.mode==='parent'&&!parentEnabled())S.mode='player';
@@ -610,6 +633,7 @@ function render(){
     if(!valid.includes(S.tab))S.tab=valid[0];
     html=S.round?vRoundEdit():S.lesson?vLessonEdit():header()+'<main class="wrap">'+view()+'</main>'+tabbar();
   }
+  if(S.termsView)html+='<div class="tview" role="dialog" aria-label="약관 및 정책"><div class="tbar"><b>약관 및 정책</b><button data-act="closeterms">닫기</button></div><iframe src="/terms#'+S.termsView+'" title="약관 및 정책"></iframe></div>';
   if(S.viewer)html+='<div class="viewer" data-act="closeviewer" role="dialog" aria-label="크게 보기"><button class="vclose" data-act="closeviewer" aria-label="닫기">'+I.x+'</button>'+(S.viewer.type==='video'?'<video src="'+mediaUrl(S.viewer.key)+'" controls autoplay playsinline></video>':'<img src="'+mediaUrl(S.viewer.key)+'" alt="레슨 사진">')+'</div>';
   if(S.dlg)html+='<div class="dlg" role="alertdialog" aria-modal="true"><div class="box2"><p>'+esc(S.dlg.msg)+'</p><div class="acts2"><button class="btn ghost" data-act="dlgno">취소</button><button class="btn" data-act="dlgok" style="'+(S.dlg.danger?'background:#E0322A;color:#fff':'')+'">'+esc(S.dlg.ok||'확인')+'</button></div></div></div>';
   app.innerHTML=html;
@@ -643,16 +667,34 @@ function tabbar(){
 }
 
 /* ---------- onboarding ---------- */
+function agOk(){const a=S.ag;if(!a.terms||!a.privacy||!a.overseas)return false;if(a.age==='14+')return true;if(a.age==='u14')return !!((a.gname||'').trim()&&(a.gphone||'').replace(/[^0-9]/g,'').length>=9&&a.gok);return false;}
+function authReady(){const su=S.authMode==='signup',D=S.drafts;return !!((D.email||'').trim()&&(D.pw||'').length>=(su?8:1)&&(!su||((D.name||'').trim()&&agOk())));}
+function agBlock(){
+  const a=S.ag,all=a.terms&&a.privacy&&a.overseas;
+  const row=(k,label,view)=>'<div class="agrow"><button class="agck'+(a[k]?' on':'')+'" data-act="ag" data-v="'+k+'" aria-pressed="'+!!a[k]+'"><span class="agbox">'+I.check+'</span>'+label+'</button>'+(view?'<button class="agview" data-act="terms" data-v="'+view+'">보기</button>':'')+'</div>';
+  return '<div class="agwrap"><button class="agck agall'+(all?' on':'')+'" data-act="agall" aria-pressed="'+!!all+'"><span class="agbox">'+I.check+'</span>필수 약관 전체 동의</button>'+
+    row('terms','[필수] 서비스 이용약관','terms')+row('privacy','[필수] 개인정보 수집·이용','privacy')+row('overseas','[필수] 개인정보 국외 이전(서버 운영)','overseas')+
+    '<div class="agage"><button class="'+(a.age==='14+'?'on':'')+'" data-act="agage" data-v="14+">만 14세 이상이에요</button><button class="'+(a.age==='u14'?'on':'')+'" data-act="agage" data-v="u14">만 14세 미만이에요</button></div>'+
+    (a.age==='u14'?'<div class="agg"><p>만 14세 미만은 보호자의 동의가 필요해요.</p><input type="text" data-field="ag-gname" value="'+esc(a.gname||'')+'" placeholder="보호자 이름" autocomplete="off"><input type="text" data-field="ag-gphone" value="'+esc(a.gphone||'')+'" placeholder="보호자 휴대폰 번호" inputmode="tel" autocomplete="off" style="margin-top:8px">'+row('gok','[필수] 보호자가 위 약관에 동의했어요','')+'</div>':'')+'</div>';
+}
+function vConsent(){
+  return '<div class="onb"><div class="in"><span class="chipk">'+FIELD.label+'</span><h1 class="logo">FeedUp.</h1>'+
+    '<p style="font-weight:800;font-size:18px;margin:0 0 4px">약관 동의가 필요해요</p><p class="hint" style="margin:0 0 6px">계속 이용하려면 아래 내용에 동의해 주세요.</p>'+agBlock()+
+    (S.authErr?'<p class="hint" style="color:#E0322A;font-weight:700">'+esc(S.authErr)+'</p>':'')+
+    '<button class="go'+(agOk()?' ready':'')+'" data-act="consent"'+(S.authBusy?' disabled':'')+'>'+(S.authBusy?'잠시만요…':'동의하고 계속하기')+'</button>'+
+    '<div class="foot"><button data-act="logout"><b>로그아웃</b></button></div></div></div>';
+}
 function vAuth(){
   const su=S.authMode==='signup',D=S.drafts;
-  const ready=(D.email||'').trim()&&(D.pw||'').length>=(su?8:1)&&(!su||(D.name||'').trim());
+  const ready=authReady();
   return '<div class="onb"><div class="in"><span class="chipk">'+FIELD.label+'</span><h1 class="logo">FeedUp.</h1>'+
     (su?'<label for="aname">이름</label><input id="aname" type="text" data-field="name" value="'+esc(D.name||'')+'" placeholder="코치와 선수에게 보여요" autocomplete="name"><div style="height:22px"></div>':'')+
     '<label for="aemail">이메일</label><input id="aemail" type="email" data-field="email" value="'+esc(D.email||'')+'" placeholder="example@email.com" autocomplete="email" inputmode="email">'+
     '<div style="height:22px"></div><label for="apw">비밀번호</label><input id="apw" type="password" data-field="pw" value="'+esc(D.pw||'')+'" placeholder="'+(su?'8자 이상':'비밀번호')+'" autocomplete="'+(su?'new-password':'current-password')+'">'+
+    (su?agBlock():'')+
     (S.authErr?'<p class="hint" style="color:#E0322A;font-weight:700">'+esc(S.authErr)+'</p>':'')+
     '<button class="go'+(ready?' ready':'')+'" data-act="auth"'+(S.authBusy?' disabled':'')+'>'+(S.authBusy?'잠시만요…':(su?'가입하고 시작하기':'시작하기'))+'</button>'+
-    '<div class="foot">'+(su?'이미 계정이 있나요? <button data-act="authmode" data-v="login"><b>로그인</b></button>':'처음이신가요? <button data-act="authmode" data-v="signup"><b>회원가입</b></button>')+'</div></div></div>';
+    '<div class="foot">'+(su?'이미 계정이 있나요? <button data-act="authmode" data-v="login"><b>로그인</b></button>':'처음이신가요? <button data-act="authmode" data-v="signup"><b>회원가입</b></button>')+'</div><div class="foot" style="margin-top:14px;font-size:12.5px"><button data-act="terms" data-v="terms">이용약관</button> · <button data-act="terms" data-v="privacy">개인정보 처리방침</button></div></div></div>';
 }
 function vOnboard(){
   const v=S.drafts.name!=null?S.drafts.name:S.defaultName;
@@ -754,14 +796,21 @@ function vRoundEdit(){
     const notes=r.holes.map((hh,i)=>hh.note?'<div class="miss"><span>'+(i+1)+'번 홀</span><span class="muted" style="text-align:right">'+esc(hh.note)+'</span></div>':'').join('');
     if(notes)x+='<h2>샷 메모</h2><div class="card">'+notes+'</div>';
   }
-  const ms=r.misses||[],gN=ms.filter(isGood).length,mN=ms.length-gN;
+  const ms=r.misses||[],shotMs=ms.filter(m=>!m.startsWith('멘탈:')),gN=shotMs.filter(isGood).length,mN=shotMs.length-gN;
+  const tagRow=cat=>{const gk=cat+':굿',gon=ms.includes(gk);
+    return '<button class="tag good'+(gon?' on':'')+'" data-act="miss" data-v="'+esc(gk)+'"'+(ro?' disabled':'')+' aria-pressed="'+gon+'">굿</button>'+MISS[cat].map(m=>{const k=cat+':'+m,on=ms.includes(k);return '<button class="tag'+(on?' on':'')+'" data-act="miss" data-v="'+esc(k)+'"'+(ro?' disabled':'')+' aria-pressed="'+on+'">'+m+'</button>';}).join('');};
   x+='<h2>샷 분석 <small>굿 '+gN+'개, 미스 '+mN+'개</small></h2><div class="tags">';
-  Object.keys(MISS).forEach(cat=>{
+  Object.keys(MISS).filter(c=>c!=='멘탈').forEach(cat=>{x+='<h4>'+cat+'</h4>'+tagRow(cat);});
+  x+='</div>';
+  const msc=+r.mentalScore||0;
+  x+='<h2>라운드 총평 <small>18홀을 마친 뒤 적어요</small></h2><div class="card">'+
+    '<div class="row"><div class="k">멘탈 점수</div><div class="pills">'+[1,2,3,4,5].map(v=>'<button class="pill'+(msc===v?' on':'')+'" data-act="mscore" data-v="'+v+'"'+(ro?' disabled':'')+'><span class="num">'+v+'</span></button>').join('')+'<span class="muted" style="font-size:12px;align-self:center">1 흔들림 ~ 5 최고</span></div></div>'+
+    '<div class="row tags"><div class="k">오늘 멘탈</div>'+tagRow('멘탈')+'</div>'+
+    '<div class="row" style="margin:0"><div class="k">총평</div><textarea data-field="r-memo" placeholder="잘된 점, 아쉬운 점, 전반과 후반의 멘탈 흐름, 다음 라운드에서 바꿀 것" style="min-height:120px"'+(ro?' disabled':'')+'>'+esc(r.memo||'')+'</textarea></div></div>';
+  if(false)Object.keys(MISS).forEach(cat=>{
     const gk=cat+':굿',gon=ms.includes(gk);
     x+='<h4>'+cat+'</h4><button class="tag good'+(gon?' on':'')+'" data-act="miss" data-v="'+esc(gk)+'"'+(ro?' disabled':'')+' aria-pressed="'+gon+'">굿</button>'+MISS[cat].map(m=>{const k=cat+':'+m,on=(r.misses||[]).includes(k);return '<button class="tag'+(on?' on':'')+'" data-act="miss" data-v="'+esc(k)+'"'+(ro?' disabled':'')+'>'+m+'</button>';}).join('');
   });
-  x+='</div>';
-  x+='<h2>라운드 메모</h2><textarea data-field="r-memo" placeholder="코스 컨디션, 느낀 점"'+(ro?' disabled':'')+'>'+esc(r.memo||'')+'</textarea>';
   x+=fbHtml(fbsFor('round',r.id,r.playerId));
   if(ro&&mine)x+='<button class="btn" data-act="editround">이 '+kn+' 수정하기</button>';
   if(!ro){
@@ -779,7 +828,8 @@ function range(){
 }
 function rstat(list){
   const st=list.map(rs).filter(s=>s.n>0),sum=k=>st.reduce((a,s)=>a+s[k],0),full=st.filter(s=>s.n===18);
-  return{count:list.length,avg:full.length?(full.reduce((a,s)=>a+s.tot,0)/full.length).toFixed(1):null,
+  const mm=list.map(r=>+r.mentalScore||0).filter(Boolean);
+  return{mental:mm.length?(mm.reduce((a,b)=>a+b,0)/mm.length).toFixed(1):null,count:list.length,avg:full.length?(full.reduce((a,s)=>a+s.tot,0)/full.length).toFixed(1):null,
     putt:st.length?(sum('putt')/sum('n')*18).toFixed(1):null,fw:pct(sum('fw'),sum('fwN')),gir:pct(sum('gir'),sum('n')),rec:pct(sum('rec'),sum('recN')),has:st.length>0};
 }
 function compute(p){
@@ -851,10 +901,10 @@ function vReport(){
       const P=C.rp,M=C.rm,gap=(P.avg&&M.avg)?(M.avg-P.avg):null;
       if(gap!=null)h+='<div class="card cmphead"><div class="v num'+(gap>0?'':' under')+'">'+(gap>0?'+':'')+gap.toFixed(1)+'</div><div class="l">시합에서 연습보다 '+(gap>0?'더 친 타수':'덜 친 타수')+'</div></div>';
       const row=(l,a,b,u,low)=>{const d=(a!=null&&b!=null)?(+b-+a):null;return '<div class="cmprow"><span>'+l+'</span><b class="num">'+(a==null?'–':a+u)+'</b><b class="num">'+(b==null?'–':b+u)+'</b><i class="num'+(d==null||d===0?'':((low?d<0:d>0)?' up':' down'))+'">'+(d==null?'':(d>0?'+':'')+(Math.round(d*10)/10))+'</i></div>';};
-      h+='<div class="card cmp" style="margin-top:8px"><div class="cmprow hd"><span></span><b>연습</b><b>시합</b><i>차이</i></div>'+row('평균 스코어',P.avg,M.avg,'',true)+row('평균 퍼트',P.putt,M.putt,'',true)+row('페어웨이',P.fw,M.fw,'%',false)+row('그린 적중',P.gir,M.gir,'%',false)+'</div>';
+      h+='<div class="card cmp" style="margin-top:8px"><div class="cmprow hd"><span></span><b>연습</b><b>시합</b><i>차이</i></div>'+row('평균 스코어',P.avg,M.avg,'',true)+row('평균 퍼트',P.putt,M.putt,'',true)+row('페어웨이',P.fw,M.fw,'%',false)+row('그린 적중',P.gir,M.gir,'%',false)+row('멘탈 점수',P.mental,M.mental,'',false)+'</div>';
     }else{
       const X=C.rp.has?C.rp:C.rm;
-      h+='<div class="kpis" style="margin-top:0"><div class="kpi"><div class="v num">'+(X.avg||'–')+'</div><div class="l">평균 스코어 (18홀, '+(C.rp.has?'연습':'시합')+')</div></div><div class="kpi"><div class="v num">'+X.putt+'</div><div class="l">18홀 기준 평균 퍼트</div></div><div class="kpi"><div class="v num">'+X.fw+'<small>%</small></div><div class="l">페어웨이 안착률</div></div><div class="kpi"><div class="v num">'+X.gir+'<small>%</small></div><div class="l">그린 적중률</div></div></div>';
+      h+='<div class="kpis" style="margin-top:0"><div class="kpi"><div class="v num">'+(X.avg||'–')+'</div><div class="l">평균 스코어 (18홀, '+(C.rp.has?'연습':'시합')+')</div></div><div class="kpi"><div class="v num">'+X.putt+'</div><div class="l">18홀 기준 평균 퍼트</div></div><div class="kpi"><div class="v num">'+X.fw+'<small>%</small></div><div class="l">페어웨이 안착률</div></div><div class="kpi"><div class="v num">'+X.gir+'<small>%</small></div><div class="l">그린 적중률</div></div>'+(X.mental?'<div class="kpi"><div class="v num">'+X.mental+'<small>/5</small></div><div class="l">평균 멘탈 점수</div></div>':'')+'</div>';
     }
     if(C.goodN){
       const mx=Math.max(...C.goods.map(x=>x[1]));
@@ -904,6 +954,7 @@ async function demoSummary(C,coach){
   const bad=low.map(x=>'• '+x.name+' 항목은 '+x.days+'/'+C.pastN+'일('+x.pc+'%)만 체크했어요.');
   if(C.hw.tot&&pct(C.hw.done,C.hw.tot)<50)bad.push('• 레슨 숙제 수행률이 '+pct(C.hw.done,C.hw.tot)+'%로 낮아요.');
   if(C.rp.avg&&C.rm.avg&&C.rm.avg-C.rp.avg>=3)bad.push('• 시합에서 연습보다 '+(C.rm.avg-C.rp.avg).toFixed(1)+'타 더 쳐서, 실전 긴장 관리가 과제예요.');
+  if(C.rp.mental&&C.rm.mental&&C.rm.mental<C.rp.mental-0.4)bad.push('• 시합 멘탈 점수가 '+C.rm.mental+'점으로 연습 라운드('+C.rp.mental+'점)보다 낮아요.');
   if(R.has&&+R.putt>=33)bad.push('• 18홀 기준 평균 퍼트가 '+R.putt+'개로 많은 편이에요.');
   if(C.misses.length)bad.push('• 가장 많이 나온 미스 원인은 '+C.misses[0][0].replace(':',' / ')+'('+C.misses[0][1]+'회)예요.');
   if(!bad.length)bad.push('• 크게 빠진 항목이 없어요. 지금 리듬을 유지해 봐요.');
@@ -932,7 +983,7 @@ async function runAI(){
     항목별체크일수:C.perDrill.map(x=>'['+x.group+'] '+x.name+': '+x.days+'/'+C.pastN),
     일별:C.daily.filter(x=>!x.fut&&(x.done||x.L.memo)).map(x=>({날짜:x.d,완료:x.done+'/'+C.items.length,빠진항목:C.items.filter(i=>!isChk(x.L,i)).map(i=>i.name),메모:x.L.memo||''})),
     레슨:C.lessons.map(l=>({날짜:l.date,코치:lessonCoach(l),주제:l.topics||[],내용:l.content,숙제:hwLines(l),사진영상수:(l.media||[]).length,코치피드백:fbsFor('lesson',l.id,l.playerId).map(f=>f.text)})),숙제수행:C.hw.done+'/'+C.hw.tot,
-    라운드:C.rounds.map(r=>{const s=rs(r);return{종류:KIND(r)==='match'?'시합':'연습',대회:KIND(r)==='match'?r.match:null,날짜:r.date,코스:r.course,홀수:s.n,스코어:s.tot,파대비:vsPar(s.vs),퍼트:s.putt,페어웨이:s.fw+'/'+s.fwN,GIR:s.gir+'/'+s.n,리커버리:s.rec+'/'+s.recN,굿:(r.misses||[]).filter(isGood).map(goodCat),미스원인:(r.misses||[]).filter(m=>!isGood(m)),메모:r.memo||'',샷메모:r.holes.map((h,i)=>h.note?(i+1)+'번홀 '+h.note:'').filter(Boolean)};}),
+    라운드:C.rounds.map(r=>{const s=rs(r);return{종류:KIND(r)==='match'?'시합':'연습',대회:KIND(r)==='match'?r.match:null,날짜:r.date,코스:r.course,홀수:s.n,스코어:s.tot,파대비:vsPar(s.vs),퍼트:s.putt,페어웨이:s.fw+'/'+s.fwN,GIR:s.gir+'/'+s.n,리커버리:s.rec+'/'+s.recN,멘탈점수:r.mentalScore||null,총평:r.memo||'',굿:(r.misses||[]).filter(isGood).map(goodCat),미스원인:(r.misses||[]).filter(m=>!isGood(m)),메모:r.memo||'',샷메모:r.holes.map((h,i)=>h.note?(i+1)+'번홀 '+h.note:'').filter(Boolean)};}),
     라운드평균:{연습:C.rp,시합:C.rm},굿빈도:C.goods,미스원인빈도:C.misses,
     피드백:C.fbs.map(f=>({날짜:f.date,종류:f.type,작성:f.coachId===ME?'나':cName(f.coachId)+'',내용:f.text}))
   };
@@ -987,7 +1038,7 @@ function vInbox(){
       b='<div class="body"><b class="num" style="font-size:22px">'+doneOf(it.o,items)+'/'+items.length+'</b> 완료'+(mineItems.length?' <span class="muted">(내 배정 '+doneOf(it.o,mineItems)+'/'+mineItems.length+')</span>':'')+(miss.length?'<div class="muted" style="font-size:13px">빠진 항목: '+esc(miss.join(', '))+'</div>':'')+(it.o.memo?'<div class="memo">'+esc(it.o.memo)+'</div>':'')+'</div>';
     }else{
       const s=rs(it.o);
-      b='<div class="body">'+kindBadge(it.o)+' <b>'+esc(rTitle(it.o))+'</b> <b class="num'+(s.vs<0?' under':'')+'" style="font-size:22px">'+(s.tot||'–')+' '+(s.n?vsPar(s.vs):'')+'</b><div class="muted" style="font-size:13px">FW '+s.fw+'/'+s.fwN+', GIR '+s.gir+'/'+s.n+', 퍼트 '+s.putt+'</div>'+
+      b='<div class="body">'+kindBadge(it.o)+' <b>'+esc(rTitle(it.o))+'</b> <b class="num'+(s.vs<0?' under':'')+'" style="font-size:22px">'+(s.tot||'–')+' '+(s.n?vsPar(s.vs):'')+'</b><div class="muted" style="font-size:13px">FW '+s.fw+'/'+s.fwN+', GIR '+s.gir+'/'+s.n+', 퍼트 '+s.putt+(it.o.mentalScore?', 멘탈 '+it.o.mentalScore+'/5':'')+'</div>'+
         '<div class="mini">'+it.o.holes.slice(0,9).map(shape).join('')+'</div><div class="mini">'+it.o.holes.slice(9).map(shape).join('')+'</div>'+
         ((it.o.misses||[]).some(isGood)?'<div style="font-size:13px;margin-top:8px;color:var(--green);font-weight:700">굿: '+esc(it.o.misses.filter(isGood).map(goodCat).join(', '))+'</div>':'')+
         ((it.o.misses||[]).filter(m=>!isGood(m)).length?'<div class="muted" style="font-size:13px;margin-top:8px">미스 원인: '+esc(it.o.misses.filter(m=>!isGood(m)).map(m=>m.split(':')[1]).join(', '))+'</div>':'')+
@@ -1080,7 +1131,7 @@ function vLessonEdit(){
   x+='<div class="row"><div class="k">날짜</div><input type="date" data-field="l-date" value="'+esc(l.date)+'"></div>';
   x+='<div class="row"><div class="k">주제 (여러 개 선택 가능)</div><div class="pills">'+LESSON_TOPICS.map(t=>'<button class="pill'+(l.topics.includes(t)?' on':'')+'" data-act="ltopic" data-v="'+esc(t)+'">'+esc(t)+'</button>').join('')+'</div></div>';
   x+='<div class="row"><div class="k">오늘 배운 내용</div><textarea data-field="l-content" placeholder="예: 백스윙 탑에서 왼손목 각도 유지. 다운스윙 시작을 하체로." style="min-height:120px">'+esc(l.content)+'</textarea></div>';
-  x+='<div class="row"><div class="k">숙제 <span class="muted">(한 줄에 하나씩, 2주 동안 체크리스트에 매일 표시)</span></div><textarea data-field="l-hw" placeholder="예:&#10;하프스윙 왼손목 고정 50개&#10;거울 보고 탑 자세 3분">'+esc(l.homework)+'</textarea></div>';
+  x+='<div class="row"><div class="k">숙제 <span class="muted">(한 줄에 하나씩, 1주일 동안 체크리스트에 매일 표시)</span></div><textarea data-field="l-hw" placeholder="예:&#10;하프스윙 왼손목 고정 50개&#10;거울 보고 탑 자세 3분">'+esc(l.homework)+'</textarea></div>';
   x+='<div class="row"><div class="k">사진·영상 <span class="muted">(최대 6개, 영상은 10초 미만)</span></div>'+mediaHtml(l.media,true)+(S.mediaMsg?'<div class="mmsg" role="alert">'+esc(S.mediaMsg)+'</div>':'')+'</div>';
   x+='<button class="btn" data-act="savelesson"'+(S.uploading?' disabled':'')+'>'+(S.uploading?'올리는 중이에요…':(isNew?'레슨 저장':'수정 내용 저장'))+'</button>';
   if(!isNew)x+='<button class="btn danger" data-act="dellesson" data-v="'+esc(l.id)+'">이 레슨 삭제</button>';
@@ -1247,6 +1298,10 @@ function vMe(){
     '<div class="addline"><input type="text" data-field="pjoin" placeholder="자녀에게 받은 코드 6자리" value="'+esc(S.drafts.pjoin||'')+'" autocapitalize="characters" maxlength="8"><button class="btn sm" data-act="pjoin">연결</button></div>'+
     (kl.length?'<div style="margin-top:10px">'+kl.map(l=>'<div class="prow"><span>'+esc(pName(l.playerId))+'</span><button class="rbtn del" data-act="unparent" data-v="'+esc(l.id)+'">연결 해제</button></div>').join('')+'</div>'+(S.mode!=='parent'?'<button class="btn" data-act="mode" data-v="parent">학부모 모드로 가기</button>':''):'')+'</div>';
   h+='<h2>계정</h2><div class="card"><p style="margin:0" class="muted">'+esc(USER?USER.email:'')+'</p><button class="btn ghost" data-act="logout">로그아웃</button></div>';
+  h+='<h2>약관 및 정책</h2><div class="card" style="padding:4px 16px">'+[['terms','서비스 이용약관'],['paid','유료서비스 이용약관 및 환불 규정'],['privacy','개인정보 처리방침']].map(x=>'<button class="prow" style="width:100%;text-align:left;font-weight:500" data-act="terms" data-v="'+x[0]+'"><span>'+x[1]+'</span>'+I.right.replace('<svg','<svg width="16" height="16"')+'</button>').join('')+'</div>';
+  if(!S.withdraw)h+='<button class="btn danger" data-act="wdopen" style="margin-top:22px">회원 탈퇴</button>';
+  else h+='<div class="card" style="margin-top:22px;border-color:#E0322A"><p style="margin:0 0 6px;font-weight:800">정말 탈퇴할까요?</p><p class="muted" style="margin:0 0 10px;font-size:13.5px">연습 체크, 레슨, 라운드 기록, 사진·영상, 받은 피드백, 코치·보호자 연결이 모두 삭제되고 되돌릴 수 없어요. 법령에 따라 보관해야 하는 결제 기록은 정해진 기간 동안 따로 보관돼요.</p><input type="password" data-field="wdpw" placeholder="비밀번호 확인" autocomplete="current-password"><div style="display:flex;gap:8px;margin-top:10px"><button class="btn ghost" data-act="wdcancel" style="margin:0">취소</button><button class="btn" data-act="withdraw" style="margin:0;background:#E0322A;color:#fff">탈퇴하기</button></div></div>';
+  h+='<div class="bizinfo">FeedUp · 대표자 [ ] · 사업자등록번호 [ ] · 통신판매업 신고번호 [ ]<br>주소 [ ] · 이메일 [ ] · 연락처 [ ]</div>';
   return h;
 }
 
@@ -1285,12 +1340,30 @@ document.addEventListener('click',async e=>{
       if(!n){toast('이름을 입력하세요.');break;}
       await Store.set('profiles',ME,{name:n,share:false,field:FIELD.id,createdAt:Date.now()});delete S.drafts.name;render();break;}
     case'authmode':S.authMode=v;S.authErr='';render();break;
+    case'ag':S.ag[v]=!S.ag[v];render();break;
+    case'agall':{const on=!(S.ag.terms&&S.ag.privacy&&S.ag.overseas);S.ag.terms=S.ag.privacy=S.ag.overseas=on;render();break;}
+    case'agage':S.ag.age=v;render();break;
+    case'terms':S.termsView=v;render();break;
+    case'closeterms':S.termsView=null;render();break;
+    case'consent':{
+      if(!agOk()){S.authErr='필수 항목에 모두 동의해 주세요.';render();break;}
+      S.authBusy=true;S.authErr='';render();
+      try{await API.req('/consent',{method:'POST',body:{agree:S.ag}});await Store.load();}catch(err){S.authErr=err.message;}
+      S.authBusy=false;render();break;}
+    case'wdopen':S.withdraw=true;render();break;
+    case'wdcancel':S.withdraw=false;delete S.drafts.wdpw;render();break;
+    case'withdraw':{
+      const pw=S.drafts.wdpw||'';if(!pw){toast('비밀번호를 입력해 주세요.');break;}
+      try{await API.req('/account/delete',{method:'POST',body:{password:pw}});toast('탈퇴가 완료됐어요.');setTimeout(()=>location.reload(),900);}
+      catch(err){toast(err.message);}
+      break;}
     case'auth':{
       if(S.authBusy)break;
       const su=S.authMode==='signup',D=S.drafts;
       S.authBusy=true;S.authErr='';render();
       try{
-        const j=await API.req(su?'/auth/signup':'/auth/login',{method:'POST',body:{email:D.email,password:D.pw,name:D.name}});
+        if(su&&!agOk())throw new Error('약관 동의와 나이 확인을 완료해 주세요.');
+        const j=await API.req(su?'/auth/signup':'/auth/login',{method:'POST',body:{email:D.email,password:D.pw,name:D.name,agree:su?S.ag:undefined}});
         USER=j.user;ME=j.me;delete D.pw;S.loading=true;render();
         await Store.load();S.loading=false;
       }catch(err){S.authErr=err.message;}
@@ -1318,6 +1391,7 @@ document.addEventListener('click',async e=>{
     case'hole':S.hole=+v;render();break;
     case'rk':S.rkind=v;render();break;
     case'rkind':r.kind=v;r.match=r.match||{name:'',round:'1R',rank:'',field:'',tension:0};render();break;
+    case'mscore':r.mentalScore=+r.mentalScore===+v?0:+v;render();break;
     case'mround':r.match.round=v;render();break;
     case'mtension':r.match.tension=+r.match.tension===+v?0:+v;render();break;
     case'kid':S.child=v;S.ai={busy:false,key:null,text:''};render();break;
@@ -1397,6 +1471,8 @@ document.addEventListener('input',e=>{
   else if(f==='l-hw')S.lesson.homework=v;
   else if(f==='l-date'&&v)S.lesson.date=v;
   else if(f==='l-cname')S.lesson.coachName=v;
+  else if(f==='ag-gname')S.ag.gname=v;
+  else if(f==='ag-gphone')S.ag.gphone=v;
   else if(f==='mfile')return;
   else if(f==='r-date'&&v)S.round.date=v;
   else if(f==='r-memo')S.round.memo=v;
@@ -1405,8 +1481,9 @@ document.addEventListener('input',e=>{
   else if(f==='dn')S.dd[el.dataset.w][+el.dataset.i].name=v;
   else if(f==='dt')S.dd[el.dataset.w][+el.dataset.i].target=v;
   else S.drafts[f]=v;
+  if(['ag-gname','ag-gphone'].includes(f)){const b=document.querySelector('.onb .go');if(b)b.classList.toggle('ready',USER?agOk():authReady());}
   if(['name','email','pw'].includes(f)){const b=document.querySelector('.onb .go');if(b){
-    if(!USER){const su=S.authMode==='signup',D=S.drafts;b.classList.toggle('ready',!!((D.email||'').trim()&&(D.pw||'').length>=(su?8:1)&&(!su||(D.name||'').trim())));}
+    if(!USER)b.classList.toggle('ready',authReady());
     else b.classList.toggle('ready',!!v.trim());}}
 });
 document.addEventListener('change',e=>{const el=e.target;if(el.dataset&&el.dataset.field==='mfile'){const f=el.files&&el.files[0];el.value='';if(f)addMedia(f);return;}if(el.dataset&&el.dataset.field==='l-date'&&el.value&&S.lesson)S.lesson.date=el.value;if(el.dataset&&el.dataset.field==='r-date'&&el.value&&S.round)S.round.date=el.value;});
