@@ -331,6 +331,21 @@ textarea{min-height:88px}
 .prem{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.02em;background:var(--ink);color:var(--card);border-radius:5px;padding:2px 7px;margin-left:6px;vertical-align:2px}
 .ai .demo+.demo{margin-left:6px}
 .tabbar button{font-size:11px}
+.mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
+.mitem{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--paper)}
+.mthumb{display:block;width:100%;height:100%;padding:0;border:0;position:relative}
+.mthumb img,.mthumb video{width:100%;height:100%;object-fit:cover;display:block;background:#111}
+.mthumb .play{position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:22px;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+.mdel{position:absolute;top:5px;right:5px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;display:grid;place-items:center}
+.mdel svg{width:14px;height:14px}
+label.mitem{cursor:pointer;border:1.5px dashed var(--line);background:var(--card)}
+.madd{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12.5px;color:var(--muted);font-weight:700}
+.madd b{font-size:26px;line-height:1;font-weight:400}
+.mup{position:absolute;inset:0;display:grid;place-items:center;font-size:12.5px;color:var(--muted);border:1.5px dashed var(--line);border-radius:10px}
+.viewer{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.94);display:flex;align-items:center;justify-content:center;padding:calc(56px + env(safe-area-inset-top,0px)) 12px calc(24px + env(safe-area-inset-bottom,0px))}
+.viewer img,.viewer video{max-width:100%;max-height:100%;border-radius:8px}
+.vclose{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:12px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;display:grid;place-items:center}
+.vclose svg{width:20px;height:20px}
 .fbo{font-size:12.5px;color:var(--muted);margin-top:8px}
 </style>
 </head>
@@ -469,7 +484,7 @@ const S={
   mode:lsGet('sn_mode','player'),tab:null,date:today(),period:'week',anchor:today(),
   reportPlayer:null,inboxFilter:'pending',inboxPlayer:'all',
   round:null,roundRO:false,roundSnap:null,hole:0,
-  lesson:null,lessonSnap:null,rkind:'all',lessonPlayer:'all',child:null,
+  lesson:null,lessonSnap:null,uploading:0,newKeys:[],viewer:null,rkind:'all',lessonPlayer:'all',child:null,
   loading:true,drafts:{},dd:{},dlg:null,defaultName:'',authMode:'login',authBusy:false,authErr:'',
   ai:{busy:false,key:null,text:''}
 };
@@ -492,14 +507,15 @@ const parentEnabled=()=>childrenOf(ME).length>0;
 const isParentOf=p=>childrenOf(ME).includes(p);
 const allLessons=()=>Object.entries(Store.data.lessons||{}).map(([id,l])=>Object.assign({},l,{id}));
 const lessonsOf=p=>allLessons().filter(l=>l.playerId===p).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
+const lessonCoach=l=>l.coachId?(l.coachId===ME?'내 레슨':cName(l.coachId)):(l.coachName||'개인 레슨');
 const hwLines=l=>String(l.homework||'').split('\n').map(x=>x.trim()).filter(Boolean).slice(0,10);
 function hwGroups(p,d){
   if(!d)return[];
   const by={};
   allLessons().forEach(l=>{
     if(l.playerId!==p||!hwLines(l).length||l.date>d||addD(l.date,14)<d)return;
-    const b=by[l.coachId];
-    if(!b||b.date<l.date||(b.date===l.date&&(b.createdAt||0)<(l.createdAt||0)))by[l.coachId]=l;
+    const k=l.coachId||'self',b=by[k];
+    if(!b||b.date<l.date||(b.date===l.date&&(b.createdAt||0)<(l.createdAt||0)))by[k]=l;
   });
   return Object.values(by).map(l=>({owner:'hw',coachId:l.coachId,lesson:l,items:hwLines(l).map((x,i)=>({id:'hw'+i,name:x,target:'',key:'hw:'+l.id+':'+i,hw:true}))}));
 }
@@ -509,7 +525,7 @@ function groups(p,d){
   return g.concat(hwGroups(p,d));
 }
 function gLabel(g,p){
-  if(g.owner==='hw')return '레슨 숙제 ('+(g.coachId===ME?'내 레슨':cName(g.coachId))+', '+md(g.lesson.date)+')';
+  if(g.owner==='hw')return '레슨 숙제 ('+lessonCoach(g.lesson)+', '+md(g.lesson.date)+')';
   if(g.owner==='me')return p===ME?'내 연습 항목':'선수 개인 항목';
   if(g.coachId===ME)return '내가 배정한 항목';
   return cName(g.coachId)+' 배정';
@@ -589,6 +605,7 @@ function render(){
     if(!valid.includes(S.tab))S.tab=valid[0];
     html=S.round?vRoundEdit():S.lesson?vLessonEdit():header()+'<main class="wrap">'+view()+'</main>'+tabbar();
   }
+  if(S.viewer)html+='<div class="viewer" data-act="closeviewer" role="dialog" aria-label="크게 보기"><button class="vclose" data-act="closeviewer" aria-label="닫기">'+I.x+'</button>'+(S.viewer.type==='video'?'<video src="'+mediaUrl(S.viewer.key)+'" controls autoplay playsinline></video>':'<img src="'+mediaUrl(S.viewer.key)+'" alt="레슨 사진">')+'</div>';
   if(S.dlg)html+='<div class="dlg" role="alertdialog" aria-modal="true"><div class="box2"><p>'+esc(S.dlg.msg)+'</p><div class="acts2"><button class="btn ghost" data-act="dlgno">취소</button><button class="btn" data-act="dlgok" style="'+(S.dlg.danger?'background:#E0322A;color:#fff':'')+'">'+esc(S.dlg.ok||'확인')+'</button></div></div></div>';
   app.innerHTML=html;
   try{window.scrollTo(0,y);}catch(e){}
@@ -777,6 +794,7 @@ function compute(p){
   const misses=Object.entries(mc).sort((a,b)=>b[1]-a[1]);
   const fbs=[];
   pdays.forEach(x=>fbsFor('log',logId(p,x.d),p).forEach(f=>fbs.push(Object.assign({},f,{type:'연습',memo:x.L.memo||''}))));
+  lessons.forEach(l=>fbsFor('lesson',l.id,p).forEach(f=>fbs.push(Object.assign({},f,{type:'레슨',memo:l.content||''}))));
   rounds.forEach(r=>fbsFor('round',r.id,p).forEach(f=>fbs.push(Object.assign({},f,{type:KIND(r)==='match'?'시합':'라운드',memo:r.memo||''}))));
   fbs.sort((a,b)=>a.date.localeCompare(b.date));
   return{R,daily,pastN:pdays.length,completion,active,perDrill,rounds,rnd,rp,rm,misses,fbs,items:base,goodN,lessons,topics:Object.entries(tc).sort((a,b)=>b[1]-a[1]),hw:{done:hwDone,tot:hwTot}};
@@ -904,7 +922,7 @@ async function runAI(){
     지난일수:C.pastN,연습한날:C.active,평균완료율:C.completion+'%',
     항목별체크일수:C.perDrill.map(x=>'['+x.group+'] '+x.name+': '+x.days+'/'+C.pastN),
     일별:C.daily.filter(x=>!x.fut&&(x.done||x.L.memo)).map(x=>({날짜:x.d,완료:x.done+'/'+C.items.length,빠진항목:C.items.filter(i=>!isChk(x.L,i)).map(i=>i.name),메모:x.L.memo||''})),
-    레슨:C.lessons.map(l=>({날짜:l.date,코치:cName(l.coachId),주제:l.topics||[],내용:l.content,숙제:hwLines(l),선수메모:l.playerNote||''})),숙제수행:C.hw.done+'/'+C.hw.tot,
+    레슨:C.lessons.map(l=>({날짜:l.date,코치:lessonCoach(l),주제:l.topics||[],내용:l.content,숙제:hwLines(l),사진영상수:(l.media||[]).length,코치피드백:fbsFor('lesson',l.id,l.playerId).map(f=>f.text)})),숙제수행:C.hw.done+'/'+C.hw.tot,
     라운드:C.rounds.map(r=>{const s=rs(r);return{종류:KIND(r)==='match'?'시합':'연습',대회:KIND(r)==='match'?r.match:null,날짜:r.date,코스:r.course,홀수:s.n,스코어:s.tot,파대비:vsPar(s.vs),퍼트:s.putt,페어웨이:s.fw+'/'+s.fwN,GIR:s.gir+'/'+s.n,리커버리:s.rec+'/'+s.recN,미스원인:r.misses||[],메모:r.memo||'',샷메모:r.holes.map((h,i)=>h.note?(i+1)+'번홀 '+h.note:'').filter(Boolean)};}),
     라운드평균:{연습:C.rp,시합:C.rm},미스원인빈도:C.misses,
     피드백:C.fbs.map(f=>({날짜:f.date,종류:f.type,작성:f.coachId===ME?'나':cName(f.coachId)+'',내용:f.text}))
@@ -931,6 +949,7 @@ async function runAI(){
 function inboxItems(){
   const ps=new Set(playersOf(ME)),out=[];
   Object.entries(Store.data.logs).forEach(([id,L])=>{if(L.submitted&&ps.has(L.playerId))out.push({kind:'log',id,p:L.playerId,date:L.date,o:L,mine:Store.data.feedback[fbId(ME,'log',id)]});});
+  allLessons().forEach(l=>{if(ps.has(l.playerId)&&l.coachId===ME)out.push({kind:'lesson',id:l.id,p:l.playerId,date:l.date,o:l,mine:Store.data.feedback[fbId(ME,'lesson',l.id)]});});
   allRounds().forEach(r=>{if(ps.has(r.playerId))out.push({kind:'round',id:r.id,p:r.playerId,date:r.date,o:r,mine:Store.data.feedback[fbId(ME,'round',r.id)]});});
   return out.sort((a,b)=>b.date.localeCompare(a.date));
 }
@@ -951,7 +970,10 @@ function vInbox(){
   return h+list.slice(0,60).map(it=>{
     const ref=it.kind+':'+it.id,draft=S.drafts[ref]!=null?S.drafts[ref]:(it.mine?it.mine.text:'');
     let b='';
-    if(it.kind==='log'){
+    if(it.kind==='lesson'){
+      const l=it.o,hw=hwLines(l);
+      b='<div class="body">'+((l.topics||[]).length?'<div class="ltops" style="margin:0 0 6px">'+l.topics.map(t=>'<span class="badge log">'+esc(t)+'</span>').join('')+'</div>':'')+(l.content?'<div style="white-space:pre-wrap">'+esc(l.content)+'</div>':'')+(hw.length?'<div class="hwbox"><div class="k">숙제</div>'+hw.map(x=>'<div class="hwi">'+esc(x)+'</div>').join('')+'</div>':'')+mediaHtml(l.media)+'</div>';
+    }else if(it.kind==='log'){
       const items=allItems(it.p,it.date),mineItems=items.filter(i=>i.coachId===ME),miss=items.filter(i=>!isChk(it.o,i)).map(i=>i.name);
       b='<div class="body"><b class="num" style="font-size:22px">'+doneOf(it.o,items)+'/'+items.length+'</b> 완료'+(mineItems.length?' <span class="muted">(내 배정 '+doneOf(it.o,mineItems)+'/'+mineItems.length+')</span>':'')+(miss.length?'<div class="muted" style="font-size:13px">빠진 항목: '+esc(miss.join(', '))+'</div>':'')+(it.o.memo?'<div class="memo">'+esc(it.o.memo)+'</div>':'')+'</div>';
     }else{
@@ -963,7 +985,7 @@ function vInbox(){
         (it.o.memo?'<div class="memo">'+esc(it.o.memo)+'</div>':'')+'</div>';
     }
     const others=fbsFor(it.kind,it.id,it.p).filter(f=>f.coachId!==ME);
-    return '<div class="inbox"><div class="hd"><span class="pn">'+esc(pName(it.p))+'</span><span>'+(it.kind==='log'?'<span class="badge log">연습 체크</span>':'<span class="badge wait">'+(KIND(it.o)==='match'?'시합':'라운드')+'</span>')+' <span class="dt num">'+md(it.date)+'</span></span></div>'+b+
+    return '<div class="inbox"><div class="hd"><span class="pn">'+esc(pName(it.p))+'</span><span>'+(it.kind==='log'?'<span class="badge log">연습 체크</span>':it.kind==='lesson'?'<span class="badge match">레슨</span>':'<span class="badge wait">'+(KIND(it.o)==='match'?'시합':'라운드')+'</span>')+' <span class="dt num">'+md(it.date)+'</span></span></div>'+b+
       (others.length?others.map(f=>'<div class="fbo"><b>'+esc(cName(f.coachId))+'</b>: '+esc(f.text)+'</div>').join(''):'')+
       '<textarea data-field="fb" data-ref="'+esc(ref)+'" placeholder="피드백을 적어 주세요" style="margin-top:8px">'+esc(draft)+'</textarea><div class="acts">'+
       (it.kind==='round'?'<button class="link muted" data-act="viewround" data-v="'+esc(it.id)+'">스코어카드 보기</button>':'<span></span>')+
@@ -992,53 +1014,120 @@ function vPlayers(){
 
 
 /* ---------- lessons ---------- */
+const mediaUrl=k=>'/api/media/'+k.split('/').map(encodeURIComponent).join('/');
+function mediaHtml(list,edit){
+  list=list||[];
+  if(!list.length&&!edit)return '';
+  return '<div class="mgrid">'+list.map((m,i)=>'<div class="mitem">'+
+    (m.type==='video'?'<button class="mthumb" data-act="viewmedia" data-k="'+esc(m.key)+'" data-t="video" aria-label="영상 보기"><video src="'+mediaUrl(m.key)+'#t=0.1" preload="metadata" muted playsinline></video><span class="play">▶</span></button>'
+      :'<button class="mthumb" data-act="viewmedia" data-k="'+esc(m.key)+'" data-t="image" aria-label="사진 크게 보기"><img src="'+mediaUrl(m.key)+'" loading="lazy" alt="레슨 사진"></button>')+
+    (edit?'<button class="mdel" data-act="mdel" data-v="'+i+'" aria-label="삭제">'+I.x+'</button>':'')+'</div>').join('')+
+    (edit&&S.uploading?'<div class="mitem"><div class="mup">올리는 중…</div></div>':'')+
+    (edit&&list.length+S.uploading<6?'<label class="mitem"><span class="madd"><b>+</b>사진·영상</span><input type="file" accept="image/*,video/*" data-field="mfile" hidden></label>':'')+'</div>';
+}
 function lessonCard(l,viewer){
-  const hw=hwLines(l),own=l.coachId===ME;
-  let h='<div class="inbox lcard"><div class="hd"><span class="pn">'+esc(viewer==='coach'?pName(l.playerId):cName(l.coachId))+'</span><span class="dt num">'+l.date.replace(/-/g,'.')+'</span></div>';
+  const hw=hwLines(l);
+  let h='<div class="inbox lcard"><div class="hd"><span class="pn">'+esc(viewer==='coach'?pName(l.playerId):lessonCoach(l))+'</span><span class="dt num">'+l.date.replace(/-/g,'.')+'</span></div>';
   if((l.topics||[]).length)h+='<div class="ltops">'+l.topics.map(t=>'<span class="badge log">'+esc(t)+'</span>').join('')+'</div>';
   if(l.content)h+='<div class="body" style="white-space:pre-wrap">'+esc(l.content)+'</div>';
   if(hw.length)h+='<div class="hwbox"><div class="k">숙제'+(viewer==='player'?' <span class="muted">(오늘 체크리스트에 표시돼요)</span>':'')+'</div>'+hw.map(x=>'<div class="hwi">'+esc(x)+'</div>').join('')+'</div>';
-  if(viewer==='player'){
-    const k='ln_'+l.id,v=S.drafts[k]!=null?S.drafts[k]:(l.playerNote||'');
-    h+='<textarea data-field="lnote" data-id="'+esc(l.id)+'" placeholder="레슨 후 느낀 점, 궁금한 점" style="margin-top:10px;min-height:64px">'+esc(v)+'</textarea><div class="acts"><span class="muted" style="font-size:12px">'+(l.playerNote?'코치에게 보여요':'')+'</span><button class="btn sm" data-act="savelnote" data-v="'+esc(l.id)+'">메모 저장</button></div>';
-  }else if(l.playerNote){
-    h+='<div class="memo"><b>'+(viewer==='parent'?'아이 메모':'선수 메모')+'</b> '+esc(l.playerNote)+'</div>';
+  h+=mediaHtml(l.media);
+  if(viewer==='coach'){
+    const ref='lesson:'+l.id,mine=Store.data.feedback[fbId(ME,'lesson',l.id)],draft=S.drafts[ref]!=null?S.drafts[ref]:(mine?mine.text:'');
+    const others=fbsFor('lesson',l.id,l.playerId).filter(f=>f.coachId!==ME);
+    h+=others.map(f=>'<div class="fbo"><b>'+esc(cName(f.coachId))+'</b>: '+esc(f.text)+'</div>').join('');
+    h+='<textarea data-field="fb" data-ref="'+esc(ref)+'" placeholder="레슨 내용에 대한 피드백" style="margin-top:10px;min-height:64px">'+esc(draft)+'</textarea><div class="acts"><span></span><button class="btn sm" data-act="sendfb" data-v="'+esc(ref)+'" data-p="'+esc(l.playerId)+'" data-d="'+esc(l.date)+'">'+(mine?'피드백 수정':'피드백 보내기')+'</button></div>';
+  }else{
+    h+=fbHtml(fbsFor('lesson',l.id,l.playerId));
   }
-  if(viewer==='coach'&&own)h+='<div class="acts"><span></span><span style="display:flex;gap:6px"><button class="rbtn" data-act="editlesson" data-v="'+esc(l.id)+'">수정</button><button class="rbtn del" data-act="dellesson" data-v="'+esc(l.id)+'">삭제</button></span></div>';
+  if(viewer==='player')h+='<div class="acts"><span></span><span style="display:flex;gap:6px"><button class="rbtn" data-act="editlesson" data-v="'+esc(l.id)+'">수정</button><button class="rbtn del" data-act="dellesson" data-v="'+esc(l.id)+'">삭제</button></span></div>';
   return h+'</div>';
 }
 function vLessons(){
+  const mon=today().slice(0,7);
   if(S.mode==='coach'){
     const ps=playersOf(ME);
     if(!ps.length)return '<div class="empty" style="margin-top:12px">연결된 선수가 없어요. 선수 탭에서 초대 코드를 공유하세요.</div>';
-    let list=allLessons().filter(l=>l.coachId===ME&&ps.includes(l.playerId));
+    let list=allLessons().filter(l=>ps.includes(l.playerId)&&l.coachId===ME);
     if(S.lessonPlayer!=='all')list=list.filter(l=>l.playerId===S.lessonPlayer);
     list.sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
-    const mon=today().slice(0,7);
-    let h='<section class="hero"><div><div class="bigdate num">'+list.filter(l=>l.date.slice(0,7)===mon).length+'</div><div class="sub muted">이번 달 레슨 기록</div></div></section>';
-    h+='<button class="btn" data-act="newlesson" style="margin:0 0 14px">새 레슨 기록</button>';
+    let h='<section class="hero"><div><div class="bigdate num">'+list.filter(l=>l.date.slice(0,7)===mon).length+'</div><div class="sub muted">이번 달 선수들이 기록한 내 레슨</div></div></section>';
     h+='<div class="chips"><button class="'+(S.lessonPlayer==='all'?'on':'')+'" data-act="lpf" data-v="all">모든 선수</button>'+ps.map(x=>'<button class="'+(S.lessonPlayer===x?'on':'')+'" data-act="lpf" data-v="'+esc(x)+'">'+esc(pName(x))+'</button>').join('')+'</div>';
-    if(!list.length)return h+'<div class="empty">레슨이 끝나면 배운 내용과 숙제를 남겨 보세요. 숙제는 선수의 오늘 체크리스트에 자동으로 표시돼요.</div>';
+    if(!list.length)return h+'<div class="empty">선수가 레슨을 기록하면서 코치로 나를 고르면 여기에 모여요. 내용을 보고 피드백을 남겨 주세요.</div>';
     return h+list.map(l=>lessonCard(l,'coach')).join('');
   }
-  const list=lessonsOf(ME),mon=today().slice(0,7);
+  const list=lessonsOf(ME);
   let h='<section class="hero"><div><div class="bigdate num">'+list.filter(l=>l.date.slice(0,7)===mon).length+'</div><div class="sub muted">이번 달 받은 레슨</div></div><div class="tally"><span class="n num">'+list.length+'</span><div class="lab">전체 레슨</div></div></section>';
-  if(!list.length)return h+'<div class="empty">코치가 레슨 내용을 기록하면 여기에 쌓여요. 숙제는 오늘 체크리스트에 자동으로 들어가요.</div>';
+  h+='<button class="btn" data-act="newlesson" style="margin:0 0 16px">레슨 기록하기</button>';
+  if(!list.length)return h+'<div class="empty">레슨이 끝나면 배운 내용과 숙제를 적고 사진이나 짧은 영상을 남겨 보세요. 숙제는 오늘 체크리스트에 자동으로 들어가요.</div>';
   return h+list.map(l=>lessonCard(l,'player')).join('');
 }
-function newLesson(pid){return{id:'l'+uid(),coachId:ME,playerId:pid||'',date:today(),topics:[],content:'',homework:'',createdAt:Date.now()};}
+function newLesson(){const cs=coachesOf(ME);return{id:'l'+uid(),playerId:ME,coachId:cs.length===1?cs[0]:'',coachName:'',date:today(),topics:[],content:'',homework:'',media:[],createdAt:Date.now()};}
 function vLessonEdit(){
-  const l=S.lesson,ps=playersOf(ME),isNew=!Store.data.lessons[l.id];
+  const l=S.lesson,cs=coachesOf(ME),isNew=!Store.data.lessons[l.id];
   let x='<div class="editbar"><button class="link" data-act="closelesson">닫기</button><span class="t">'+(isNew?'레슨 기록':'레슨 수정')+'</span><button class="link" data-act="savelesson" style="color:var(--green)">저장</button></div><main class="wrap" style="padding-bottom:60px">';
-  x+='<div class="row"><div class="k">선수</div><div class="pills">'+ps.map(p=>'<button class="pill'+(l.playerId===p?' on':'')+'" data-act="lp" data-v="'+esc(p)+'">'+esc(pName(p))+'</button>').join('')+'</div></div>';
+  x+='<div class="row"><div class="k">레슨 코치</div><div class="pills">'+cs.map(c=>'<button class="pill'+(l.coachId===c?' on':'')+'" data-act="lcoach" data-v="'+esc(c)+'">'+esc(cName(c))+'</button>').join('')+'<button class="pill'+(!l.coachId?' on':'')+'" data-act="lcoach" data-v="">'+(cs.length?'다른 코치':'코치 이름 직접 입력')+'</button></div>'+
+    (!l.coachId?'<input type="text" data-field="l-cname" value="'+esc(l.coachName||'')+'" placeholder="코치 이름 (선택)" style="margin-top:8px">':'')+'</div>';
   x+='<div class="row"><div class="k">날짜</div><input type="date" data-field="l-date" value="'+esc(l.date)+'"></div>';
   x+='<div class="row"><div class="k">주제 (여러 개 선택 가능)</div><div class="pills">'+LESSON_TOPICS.map(t=>'<button class="pill'+(l.topics.includes(t)?' on':'')+'" data-act="ltopic" data-v="'+esc(t)+'">'+esc(t)+'</button>').join('')+'</div></div>';
   x+='<div class="row"><div class="k">오늘 배운 내용</div><textarea data-field="l-content" placeholder="예: 백스윙 탑에서 왼손목 각도 유지. 다운스윙 시작을 하체로." style="min-height:120px">'+esc(l.content)+'</textarea></div>';
-  x+='<div class="row"><div class="k">숙제 <span class="muted">(한 줄에 하나씩, 2주 동안 선수 체크리스트에 매일 표시)</span></div><textarea data-field="l-hw" placeholder="예:&#10;하프스윙 왼손목 고정 50개&#10;거울 보고 탑 자세 3분">'+esc(l.homework)+'</textarea></div>';
-  x+='<button class="btn" data-act="savelesson">'+(isNew?'레슨 저장':'수정 내용 저장')+'</button>';
+  x+='<div class="row"><div class="k">숙제 <span class="muted">(한 줄에 하나씩, 2주 동안 체크리스트에 매일 표시)</span></div><textarea data-field="l-hw" placeholder="예:&#10;하프스윙 왼손목 고정 50개&#10;거울 보고 탑 자세 3분">'+esc(l.homework)+'</textarea></div>';
+  x+='<div class="row"><div class="k">사진·영상 <span class="muted">(최대 6개, 영상은 10초 미만)</span></div>'+mediaHtml(l.media,true)+'</div>';
+  x+='<button class="btn" data-act="savelesson"'+(S.uploading?' disabled':'')+'>'+(S.uploading?'올리는 중이에요…':(isNew?'레슨 저장':'수정 내용 저장'))+'</button>';
   if(!isNew)x+='<button class="btn danger" data-act="dellesson" data-v="'+esc(l.id)+'">이 레슨 삭제</button>';
   return x+'</main>';
 }
+function videoDuration(file){
+  return new Promise(res=>{
+    const v=document.createElement('video'),u=URL.createObjectURL(file);let done=false;
+    const fin=d=>{if(done)return;done=true;URL.revokeObjectURL(u);res(d);};
+    v.preload='metadata';v.muted=true;v.playsInline=true;
+    v.onloadedmetadata=()=>fin(isFinite(v.duration)?v.duration:null);
+    v.onerror=()=>fin(null);setTimeout(()=>fin(null),10000);
+    v.src=u;
+  });
+}
+function shrinkImage(file){
+  return new Promise(res=>{
+    const img=new Image(),u=URL.createObjectURL(file);
+    img.onload=()=>{
+      const M=1600,sc=Math.min(1,M/Math.max(img.naturalWidth,img.naturalHeight));
+      const c=document.createElement('canvas');c.width=Math.round(img.naturalWidth*sc);c.height=Math.round(img.naturalHeight*sc);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(u);
+      c.toBlob(b=>res(b||file),'image/jpeg',0.82);
+    };
+    img.onerror=()=>{URL.revokeObjectURL(u);res(file);};
+    img.src=u;
+  });
+}
+async function addMedia(file){
+  const l=S.lesson;if(!l||!file)return;
+  if(l.media.length+S.uploading>=6){toast('사진·영상은 6개까지 올릴 수 있어요.');return;}
+  const name=(file.name||'').toLowerCase();
+  let type=file.type||'';
+  if(!type)type=/\.mov$/.test(name)?'video/quicktime':/\.(mp4|m4v)$/.test(name)?'video/mp4':/\.webm$/.test(name)?'video/webm':/\.(jpe?g)$/.test(name)?'image/jpeg':/\.png$/.test(name)?'image/png':'';
+  let blob=file;
+  if(type.startsWith('image/')){
+    blob=await shrinkImage(file);type=blob.type||'image/jpeg';
+    if(!/^image\/(jpeg|png|webp|gif)$/.test(type)){toast('이 사진 형식은 올릴 수 없어요.');return;}
+  }else if(type.startsWith('video/')){
+    if(type==='video/x-m4v')type='video/mp4';
+    const d=await videoDuration(file);
+    if(d==null){toast('영상 길이를 확인하지 못했어요. 다른 영상을 골라 주세요.');return;}
+    if(d>=10){toast('10초 미만 영상만 올릴 수 있어요. (지금 '+d.toFixed(1)+'초)');return;}
+    if(file.size>40*1024*1024){toast('영상 용량이 너무 커요. 40MB 이하로 올려 주세요.');return;}
+  }else{toast('사진이나 영상 파일만 올릴 수 있어요.');return;}
+  S.uploading++;render();
+  try{
+    const r=await fetch('/api/media?lesson='+encodeURIComponent(l.id),{method:'POST',credentials:'same-origin',headers:{'content-type':type},body:blob});
+    let j={};try{j=await r.json();}catch(e){}
+    if(!r.ok)throw new Error(j.error||'올리지 못했어요. 잠시 뒤 다시 시도해 주세요.');
+    if(S.lesson&&S.lesson.id===l.id){S.lesson.media.push({key:j.key,type:j.type});S.newKeys.push(j.key);}
+    else API.req('/media/'+j.key,{method:'DELETE'}).catch(()=>{});
+  }catch(e){toast(e.message);}
+  S.uploading=Math.max(0,S.uploading-1);render();
+}
+function dropNewMedia(){S.newKeys.forEach(k=>API.req('/media/'+k,{method:'DELETE'}).catch(()=>{}));S.newKeys=[];}
 
 /* ---------- parent ---------- */
 function vChild(){
@@ -1061,7 +1150,7 @@ function vChild(){
   const rr=roundsOf(p).slice(0,3);
   h+='<h2>최근 라운드와 시합</h2>'+(rr.length?rr.map(roundCard).join(''):'<div class="empty">아직 라운드 기록이 없어요.</div>');
   const fb=Object.values(Store.data.feedback).filter(f=>f.playerId===p).sort((a,b)=>(b.at||0)-(a.at||0)).slice(0,5);
-  h+='<h2>최근 코치 피드백</h2>'+(fb.length?fb.map(f=>'<div class="fb" style="margin-top:8px"><div class="who2">'+I.coach+esc(cName(f.coachId))+' <span class="muted" style="font-weight:500">'+(f.date?md(f.date):'')+(f.kind==='round'?' 라운드':' 연습')+'</span></div><p>'+esc(f.text)+'</p></div>').join(''):'<div class="empty">아직 받은 피드백이 없어요.</div>');
+  h+='<h2>최근 코치 피드백</h2>'+(fb.length?fb.map(f=>'<div class="fb" style="margin-top:8px"><div class="who2">'+I.coach+esc(cName(f.coachId))+' <span class="muted" style="font-weight:500">'+(f.date?md(f.date):'')+(f.kind==='round'?' 라운드':f.kind==='lesson'?' 레슨':' 연습')+'</span></div><p>'+esc(f.text)+'</p></div>').join(''):'<div class="empty">아직 받은 피드백이 없어요.</div>');
   return h;
 }
 
@@ -1163,22 +1252,23 @@ document.addEventListener('click',async e=>{
     case'mtension':r.match.tension=+r.match.tension===+v?0:+v;render();break;
     case'kid':S.child=v;S.ai={busy:false,key:null,text:''};render();break;
     case'lpf':S.lessonPlayer=v;render();break;
-    case'newlesson':S.lesson=newLesson(S.lessonPlayer!=='all'?S.lessonPlayer:(playersOf(ME).length===1?playersOf(ME)[0]:''));S.lessonSnap=JSON.stringify(S.lesson);render();try{window.scrollTo(0,0);}catch(e){}break;
-    case'editlesson':{const src=Store.data.lessons[v];if(!src)break;const o=JSON.parse(JSON.stringify(src));o.id=v;o.topics=o.topics||[];S.lesson=o;S.lessonSnap=JSON.stringify(o);render();try{window.scrollTo(0,0);}catch(e){}break;}
+    case'newlesson':S.lesson=newLesson();S.newKeys=[];S.lessonSnap=JSON.stringify(S.lesson);render();try{window.scrollTo(0,0);}catch(e){}break;
+    case'editlesson':{const src=Store.data.lessons[v];if(!src)break;const o=JSON.parse(JSON.stringify(src));o.id=v;o.topics=o.topics||[];o.media=o.media||[];o.coachId=o.coachId||'';o.coachName=o.coachName||'';S.lesson=o;S.newKeys=[];S.lessonSnap=JSON.stringify(o);render();try{window.scrollTo(0,0);}catch(e){}break;}
     case'closelesson':
-      if(JSON.stringify(S.lesson)===S.lessonSnap){S.lesson=null;render();break;}
-      ask('저장하지 않은 내용은 사라져요. 닫을까요?','닫기',()=>{S.lesson=null;render();},true);break;
-    case'lp':S.lesson.playerId=v;render();break;
+      if(JSON.stringify(S.lesson)===S.lessonSnap&&!S.newKeys.length){S.lesson=null;render();break;}
+      ask('저장하지 않은 내용은 사라져요. 닫을까요?','닫기',()=>{dropNewMedia();S.lesson=null;render();},true);break;
+    case'lcoach':S.lesson.coachId=v;render();break;
     case'ltopic':{const t=S.lesson.topics,i=t.indexOf(v);if(i>=0)t.splice(i,1);else t.push(v);render();break;}
+    case'mdel':{const m=S.lesson.media.splice(+v,1)[0];if(m&&S.newKeys.includes(m.key)){S.newKeys=S.newKeys.filter(k=>k!==m.key);API.req('/media/'+m.key,{method:'DELETE'}).catch(()=>{});}render();break;}
+    case'viewmedia':S.viewer={key:el.dataset.k,type:el.dataset.t};render();break;
+    case'closeviewer':if(e.target.closest('video'))break;S.viewer=null;render();break;
     case'savelesson':{
       const l=S.lesson;
-      if(!l.playerId){toast('선수를 골라 주세요.');break;}
-      if(!l.content.trim()&&!l.homework.trim()){toast('배운 내용이나 숙제를 적어 주세요.');break;}
+      if(S.uploading){toast('사진·영상을 올리는 중이에요. 잠시만 기다려 주세요.');break;}
+      if(!l.content.trim()&&!l.homework.trim()&&!l.media.length){toast('배운 내용이나 숙제, 사진·영상 중 하나는 남겨 주세요.');break;}
       const o=JSON.parse(JSON.stringify(l)),id=o.id;delete o.id;const existed=!!Store.data.lessons[id];
-      Store.set('lessons',id,o);S.lesson=null;toast(existed?'레슨을 수정했어요.':'레슨을 기록했어요. 숙제가 선수 체크리스트에 들어가요.');render();break;}
-    case'dellesson':ask('이 레슨 기록을 삭제할까요?','삭제',()=>{Store.del('lessons',v);S.lesson=null;toast('레슨을 삭제했어요.');render();},true);break;
-    case'savelnote':{const src=Store.data.lessons[v];if(!src)break;const k='ln_'+v,txt=(S.drafts[k]!=null?S.drafts[k]:(src.playerNote||'')).trim();
-      Store.set('lessons',v,Object.assign({},src,{playerNote:txt}));delete S.drafts[k];toast('메모를 저장했어요.');render();break;}
+      Store.set('lessons',id,o);S.lesson=null;S.newKeys=[];toast(existed?'레슨을 수정했어요.':'레슨을 기록했어요.'+(o.coachId?' 코치에게도 보여요.':''));render();break;}
+    case'dellesson':ask('이 레슨 기록을 삭제할까요? 사진·영상도 함께 지워져요.','삭제',()=>{Store.del('lessons',v);S.lesson=null;toast('레슨을 삭제했어요.');render();},true);break;
     case'newpcode':try{await API.req('/pcode',{method:'POST'});await Store.load();toast('학부모 초대 코드를 만들었어요.');}catch(err){toast(err.message);}render();break;
     case'pjoin':{const c=(S.drafts.pjoin||'').trim().toUpperCase().replace(/\s/g,'');if(!c){toast('자녀에게 받은 코드를 입력하세요.');break;}
       try{const j=await API.req('/pjoin',{method:'POST',body:{code:c}});S.drafts.pjoin='';await Store.load();toast((j.childName?j.childName+' ':'')+'자녀와 연결했어요.');setMode('parent');}catch(err){toast(err.message);}break;}
@@ -1236,7 +1326,8 @@ document.addEventListener('input',e=>{
   else if(f==='l-content')S.lesson.content=v;
   else if(f==='l-hw')S.lesson.homework=v;
   else if(f==='l-date'&&v)S.lesson.date=v;
-  else if(f==='lnote')S.drafts['ln_'+el.dataset.id]=v;
+  else if(f==='l-cname')S.lesson.coachName=v;
+  else if(f==='mfile')return;
   else if(f==='r-date'&&v)S.round.date=v;
   else if(f==='r-memo')S.round.memo=v;
   else if(f==='h-note')S.round.holes[S.hole].note=v;
@@ -1248,10 +1339,11 @@ document.addEventListener('input',e=>{
     if(!USER){const su=S.authMode==='signup',D=S.drafts;b.classList.toggle('ready',!!((D.email||'').trim()&&(D.pw||'').length>=(su?8:1)&&(!su||(D.name||'').trim())));}
     else b.classList.toggle('ready',!!v.trim());}}
 });
-document.addEventListener('change',e=>{const el=e.target;if(el.dataset&&el.dataset.field==='l-date'&&el.value&&S.lesson)S.lesson.date=el.value;if(el.dataset&&el.dataset.field==='r-date'&&el.value&&S.round)S.round.date=el.value;});
+document.addEventListener('change',e=>{const el=e.target;if(el.dataset&&el.dataset.field==='mfile'){const f=el.files&&el.files[0];el.value='';if(f)addMedia(f);return;}if(el.dataset&&el.dataset.field==='l-date'&&el.value&&S.lesson)S.lesson.date=el.value;if(el.dataset&&el.dataset.field==='r-date'&&el.value&&S.round)S.round.date=el.value;});
 document.addEventListener('keydown',e=>{
   if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('div[role=button][data-act]')){e.preventDefault();e.target.click();return;}
   if(e.key==='Enter'&&!USER&&e.target.closest&&e.target.closest('.onb')){const b=document.querySelector('[data-act=auth]');if(b)b.click();return;}
+  if(e.key==='Escape'&&S.viewer){S.viewer=null;render();return;}
   if(e.key==='Escape'&&S.dlg){S.dlg=null;render();}
 });
 window.addEventListener('pagehide',flushLogs);
