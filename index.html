@@ -344,7 +344,7 @@ input.mfile{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:po
 label.mitem{cursor:pointer;border:1.5px dashed var(--line);background:var(--card)}
 .madd{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12.5px;color:var(--muted);font-weight:700}
 .madd b{font-size:26px;line-height:1;font-weight:400}
-.mup{position:absolute;inset:0;display:grid;place-items:center;font-size:12.5px;color:var(--muted);border:1.5px dashed var(--line);border-radius:10px}
+.mup{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:6px;line-height:1.35;font-size:12.5px;color:var(--muted);border:1.5px dashed var(--line);border-radius:10px}
 .viewer{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.94);display:flex;align-items:center;justify-content:center;padding:calc(56px + env(safe-area-inset-top,0px)) 12px calc(24px + env(safe-area-inset-bottom,0px))}
 .viewer img,.viewer video{max-width:100%;max-height:100%;border-radius:8px}
 .vclose{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:12px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;display:grid;place-items:center}
@@ -489,7 +489,7 @@ const S={
   mode:lsGet('sn_mode','player'),tab:null,date:today(),period:'week',anchor:today(),
   reportPlayer:null,inboxFilter:'pending',inboxPlayer:'all',
   round:null,roundRO:false,roundSnap:null,hole:0,
-  lesson:null,lessonSnap:null,mediaMsg:'',uploading:0,newKeys:[],viewer:null,rkind:'all',lessonPlayer:'all',child:null,
+  lesson:null,lessonSnap:null,mediaMsg:'',upMsg:'',uploading:0,newKeys:[],viewer:null,rkind:'all',lessonPlayer:'all',child:null,
   loading:true,drafts:{},dd:{},dlg:null,defaultName:'',authMode:'login',authBusy:false,authErr:'',
   ai:{busy:false,key:null,text:''}
 };
@@ -1031,7 +1031,7 @@ function mediaHtml(list,edit){
     (m.type==='video'?'<button class="mthumb" data-act="viewmedia" data-k="'+esc(m.key)+'" data-t="video" aria-label="영상 보기"><video src="'+mediaUrl(m.key)+'#t=0.1" preload="metadata" muted playsinline></video><span class="play">▶</span></button>'
       :'<button class="mthumb" data-act="viewmedia" data-k="'+esc(m.key)+'" data-t="image" aria-label="사진 크게 보기"><img src="'+mediaUrl(m.key)+'" loading="lazy" alt="레슨 사진"></button>')+
     (edit?'<button class="mdel" data-act="mdel" data-v="'+i+'" aria-label="삭제">'+I.x+'</button>':'')+'</div>').join('')+
-    (edit&&S.uploading?'<div class="mitem"><div class="mup">올리는 중…</div></div>':'')+
+    (edit&&S.uploading?'<div class="mitem"><div class="mup" id="mup">'+esc(S.upMsg||'올리는 중…')+'</div></div>':'')+
     (edit&&list.length+S.uploading<6?'<label class="mitem"><span class="madd"><b>+</b>사진·영상</span><input type="file" class="mfile" accept="image/*,video/*" data-field="mfile" aria-label="사진이나 영상 추가"></label>':'')+'</div>';
 }
 function lessonCard(l,viewer){
@@ -1112,6 +1112,52 @@ function shrinkImage(file){
   });
 }
 function mErr(m){S.mediaMsg=m;toast(m);render();}
+function setUp(t){S.upMsg=t;const el=document.getElementById('mup');if(el)el.textContent=t;}
+function pickMime(){
+  const c=['video/mp4;codecs=avc1.42E01E','video/mp4;codecs=avc1.4D401F','video/mp4;codecs=avc1','video/webm;codecs=vp8','video/webm;codecs=vp9','video/webm','video/mp4'];
+  return c.find(t=>{try{return MediaRecorder.isTypeSupported(t);}catch(e){return false;}})||'';
+}
+function canRecode(){return typeof MediaRecorder!=='undefined'&&typeof HTMLCanvasElement!=='undefined'&&!!HTMLCanvasElement.prototype.captureStream;}
+// 영상을 720p로 다시 만들어 용량을 줄여요(소리는 빼요). 실패하면 null.
+function recodeVideo(file,onp){
+  return new Promise(res=>{
+    const v=document.createElement('video'),u=URL.createObjectURL(file);let finished=false,rec=null,raf=0,guard=0;
+    v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');v.setAttribute('muted','');v.preload='auto';
+    v.style.cssText='position:fixed;left:0;top:0;width:4px;height:4px;opacity:0.01;pointer-events:none;z-index:-1';
+    const done=b=>{if(finished)return;finished=true;cancelAnimationFrame(raf);clearTimeout(guard);try{v.pause();v.remove();}catch(e){}URL.revokeObjectURL(u);res(b);};
+    v.onerror=()=>done(null);
+    v.onloadedmetadata=async()=>{
+      try{
+        const M=720,vw=v.videoWidth||720,vh=v.videoHeight||1280,sc=Math.min(1,M/Math.max(vw,vh));
+        const w=Math.max(2,Math.round(vw*sc/2)*2),h=Math.max(2,Math.round(vh*sc/2)*2);
+        const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');
+        g.fillStyle='#000';g.fillRect(0,0,w,h);
+        const mime=pickMime(),stream=c.captureStream(30);
+        rec=new MediaRecorder(stream,mime?{mimeType:mime,videoBitsPerSecond:2500000}:{videoBitsPerSecond:2500000});
+        const chunks=[];rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data);};
+        rec.onstop=()=>{const type=((rec.mimeType||mime||'video/webm').split(';')[0])||'video/webm';const b=new Blob(chunks,{type});done(b.size>20000?b:null);};
+        const draw=()=>{try{g.drawImage(v,0,0,w,h);}catch(e){}if(onp&&v.duration)onp(Math.min(1,v.currentTime/v.duration));if(!v.ended)raf=requestAnimationFrame(draw);};
+        v.onended=()=>{try{g.drawImage(v,0,0,w,h);}catch(e){}setTimeout(()=>{if(rec.state!=='inactive')rec.stop();},200);};
+        rec.start(250);
+        await v.play();
+        draw();
+        guard=setTimeout(()=>{try{if(rec.state!=='inactive')rec.stop();else done(null);}catch(e){done(null);}},((v.duration||10)+6)*1000);
+      }catch(e){try{if(rec&&rec.state!=='inactive')rec.stop();}catch(x){}done(null);}
+    };
+    document.body.appendChild(v);v.src=u;try{v.load();}catch(e){}
+  });
+}
+function uploadBlob(url,blob,type,onp){
+  return new Promise((res,rej)=>{
+    const x=new XMLHttpRequest();
+    x.open('POST',url);x.withCredentials=true;x.timeout=180000;x.setRequestHeader('content-type',type);
+    x.upload.onprogress=e=>{if(e.lengthComputable&&onp)onp(e.loaded/e.total);};
+    x.onload=()=>{let j={};try{j=JSON.parse(x.responseText);}catch(e){}
+      if(x.status>=200&&x.status<300)res(j);else{const er=new Error((j.error||'올리지 못했어요.')+' (오류 '+x.status+')');er.http=x.status;rej(er);}};
+    x.onerror=x.ontimeout=()=>rej(new Error('인터넷 연결이 불안정해서 올리지 못했어요. 와이파이에서 다시 시도해 주세요.'));
+    x.send(blob);
+  });
+}
 async function addMedia(file){
   const l=S.lesson;if(!l||!file)return;
   S.mediaMsg='';
@@ -1120,29 +1166,36 @@ async function addMedia(file){
   let type=(file.type||'').toLowerCase();
   if(!type)type=/\.mov$/.test(name)?'video/quicktime':/\.(mp4|m4v)$/.test(name)?'video/mp4':/\.webm$/.test(name)?'video/webm':/\.(jpe?g)$/.test(name)?'image/jpeg':/\.png$/.test(name)?'image/png':/\.(heic|heif)$/.test(name)?'image/heic':'';
   let blob=file;
-  if(type.startsWith('image/')){
-    blob=await shrinkImage(file);type=(blob.type||'').toLowerCase();
-    if(!/^image\/(jpeg|png|webp|gif)$/.test(type)){mErr('이 사진 형식('+(type||'알 수 없음')+')은 올릴 수 없어요. 아이폰이라면 설정 > 카메라 > 포맷에서 "높은 호환성"을 고르거나, 스크린샷으로 올려 주세요.');return;}
-  }else if(type.startsWith('video/')){
-    if(type==='video/x-m4v')type='video/mp4';
-    if(!/^video\/(mp4|quicktime|webm)$/.test(type)){mErr('이 영상 형식('+type+')은 올릴 수 없어요. mp4나 mov 영상을 골라 주세요.');return;}
-    if(file.size>40*1024*1024){mErr('영상 용량이 너무 커요('+Math.round(file.size/1048576)+'MB). 40MB 이하로 올려 주세요.');return;}
-    S.uploading++;render();
-    const d=await videoDuration(file);
-    S.uploading=Math.max(0,S.uploading-1);
-    if(d==null){mErr('영상 길이를 확인하지 못했어요. 사진 앱에서 영상을 10초 미만으로 잘라서 다시 올려 주세요.');return;}
-    if(d>=10){mErr('10초 미만 영상만 올릴 수 있어요. 지금 영상은 '+d.toFixed(1)+'초예요. 사진 앱의 편집에서 잘라서 올려 주세요.');return;}
-  }else{mErr('사진이나 영상 파일만 올릴 수 있어요.');return;}
-  S.uploading++;render();
+  S.uploading++;setUp('준비 중…');render();
   try{
-    const r=await fetch('/api/media?lesson='+encodeURIComponent(l.id),{method:'POST',credentials:'same-origin',headers:{'content-type':type},body:blob});
-    let j={};try{j=await r.json();}catch(e){}
-    if(!r.ok)throw new Error((j.error||'올리지 못했어요.')+' (오류 '+r.status+')');
+    if(type.startsWith('image/')){
+      blob=await shrinkImage(file);type=(blob.type||'').toLowerCase();
+      if(!/^image\/(jpeg|png|webp|gif)$/.test(type))throw new Error('이 사진 형식('+(type||'알 수 없음')+')은 올릴 수 없어요. 아이폰이라면 설정 > 카메라 > 포맷에서 "높은 호환성"을 고르거나, 스크린샷으로 올려 주세요.');
+    }else if(type.startsWith('video/')){
+      if(type==='video/x-m4v')type='video/mp4';
+      setUp('영상 확인 중…');
+      const d=await videoDuration(file);
+      if(d==null)throw new Error('영상 길이를 확인하지 못했어요. 사진 앱에서 영상을 10초 미만으로 잘라서 다시 올려 주세요.');
+      if(d>=10)throw new Error('10초 미만 영상만 올릴 수 있어요. 지금 영상은 '+d.toFixed(1)+'초예요. 사진 앱의 편집에서 잘라서 올려 주세요.');
+      let small=null;
+      if(canRecode()){setUp('영상 줄이는 중 0%');small=await recodeVideo(file,p=>setUp('영상 줄이는 중 '+Math.round(p*100)+'%'));}
+      if(small&&small.size<file.size){blob=small;type=small.type||'video/webm';}
+      else{
+        if(!/^video\/(mp4|quicktime|webm)$/.test(type))throw new Error('이 영상 형식('+type+')은 올릴 수 없어요. mp4나 mov 영상을 골라 주세요.');
+        if(file.size>40*1024*1024)throw new Error('영상 용량이 너무 커요('+Math.round(file.size/1048576)+'MB). 아이폰은 설정 > 카메라 > 비디오 녹화를 1080p로 바꾸고 찍어 주세요.');
+      }
+    }else throw new Error('사진이나 영상 파일만 올릴 수 있어요.');
+    const url='/api/media?lesson='+encodeURIComponent(l.id);
+    let j=null;
+    for(let t=0;t<2&&!j;t++){
+      try{setUp('올리는 중 0%');j=await uploadBlob(url,blob,type,p=>setUp('올리는 중 '+Math.round(p*100)+'%'));}
+      catch(e){if(t===1||e.http)throw e;setUp('다시 시도 중…');await new Promise(r=>setTimeout(r,1500));}
+    }
     if(S.lesson&&S.lesson.id===l.id){S.lesson.media.push({key:j.key,type:j.type});S.newKeys.push(j.key);}
     else API.req('/media/'+j.key,{method:'DELETE'}).catch(()=>{});
     S.mediaMsg='';
-  }catch(e){S.mediaMsg=e.message==='Failed to fetch'||e.message==='Load failed'?'인터넷 연결이 불안정해서 올리지 못했어요. 다시 시도해 주세요.':e.message;toast(S.mediaMsg);}
-  S.uploading=Math.max(0,S.uploading-1);render();
+  }catch(e){S.mediaMsg=e.message;toast(e.message);}
+  S.uploading=Math.max(0,S.uploading-1);S.upMsg='';render();
 }
 function dropNewMedia(){S.newKeys.forEach(k=>API.req('/media/'+k,{method:'DELETE'}).catch(()=>{}));S.newKeys=[];}
 
