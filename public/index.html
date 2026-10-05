@@ -518,7 +518,7 @@ function hwGroups(p,d){
   if(!d)return[];
   const by={};
   allLessons().forEach(l=>{
-    if(l.playerId!==p||!hwLines(l).length||l.date>d||addD(l.date,14)<d)return;
+    if(l.playerId!==p||!hwLines(l).length||l.date>d||addD(l.date,6)<d)return;
     const k=l.coachId||'self',b=by[k];
     if(!b||b.date<l.date||(b.date===l.date&&(b.createdAt||0)<(l.createdAt||0)))by[k]=l;
   });
@@ -1089,7 +1089,7 @@ function vLessonEdit(){
   x+='<div class="row"><div class="k">날짜</div><input type="date" data-field="l-date" value="'+esc(l.date)+'"></div>';
   x+='<div class="row"><div class="k">주제 (여러 개 선택 가능)</div><div class="pills">'+LESSON_TOPICS.map(t=>'<button class="pill'+(l.topics.includes(t)?' on':'')+'" data-act="ltopic" data-v="'+esc(t)+'">'+esc(t)+'</button>').join('')+'</div></div>';
   x+='<div class="row"><div class="k">오늘 배운 내용</div><textarea data-field="l-content" placeholder="예: 백스윙 탑에서 왼손목 각도 유지. 다운스윙 시작을 하체로." style="min-height:120px">'+esc(l.content)+'</textarea></div>';
-  x+='<div class="row"><div class="k">숙제 <span class="muted">(한 줄에 하나씩, 2주 동안 체크리스트에 매일 표시)</span></div><textarea data-field="l-hw" placeholder="예:&#10;하프스윙 왼손목 고정 50개&#10;거울 보고 탑 자세 3분">'+esc(l.homework)+'</textarea></div>';
+  x+='<div class="row"><div class="k">숙제 <span class="muted">(한 줄에 하나씩, 1주일 동안 체크리스트에 매일 표시)</span></div><textarea data-field="l-hw" placeholder="예:&#10;하프스윙 왼손목 고정 50개&#10;거울 보고 탑 자세 3분">'+esc(l.homework)+'</textarea></div>';
   x+='<div class="row"><div class="k">사진·영상 <span class="muted">(최대 6개, 영상은 10초 미만)</span></div>'+mediaHtml(l.media,true)+(S.mediaMsg?'<div class="mmsg" role="alert">'+esc(S.mediaMsg)+'</div>':'')+'</div>';
   x+='<button class="btn" data-act="savelesson"'+(S.uploading?' disabled':'')+'>'+(S.uploading?'올리는 중이에요…':(isNew?'레슨 저장':'수정 내용 저장'))+'</button>';
   if(!isNew)x+='<button class="btn danger" data-act="dellesson" data-v="'+esc(l.id)+'">이 레슨 삭제</button>';
