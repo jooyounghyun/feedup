@@ -68,6 +68,10 @@ async function rowsIn(env, col, field, values) {
 }
 const toMap = (rows, into) => { rows.forEach((r) => { into[r.id] = JSON.parse(r.data); }); return into; };
 
+async function isParentOf(env, parent, player) {
+  return !!(await getDoc(env, 'parents', parent + '__' + player));
+}
+const LESSON_TOPICS = ['스윙', '숏게임', '퍼팅', '코스 매니지먼트', '멘탈'];
 async function isActivePlayer(env, coach, player) {
   const l = await getDoc(env, 'links', coach + '__' + player);
   return !!(l && l.status === 'active');
@@ -121,7 +125,7 @@ async function logout(req, env) {
 
 /* ---------------- state (what this user may see) ---------------- */
 async function state(env, ME) {
-  const out = { profiles: {}, links: {}, codes: {}, drills: {}, logs: {}, rounds: {}, feedback: {}, reports: {} };
+  const out = { profiles: {}, links: {}, codes: {}, drills: {}, logs: {}, rounds: {}, feedback: {}, reports: {}, lessons: {}, parents: {}, pcodes: {} };
   const mine = [...(await rowsIn(env, 'links', 'coach', [ME])), ...(await rowsIn(env, 'links', 'player', [ME]))];
   toMap(mine, out.links);
   const L = Object.values(out.links);
@@ -130,20 +134,30 @@ async function state(env, ME) {
   // 내 선수들의 다른 코치 (항목 이름과 배정 항목 표시용)
   const other = (await rowsIn(env, 'links', 'player', players)).filter((r) => JSON.parse(r.data).status === 'active');
   toMap(other, out.links);
+  // 학부모 연결: 내가 학부모인 연결 + 내가 선수인 연결
+  toMap([...(await rowsIn(env, 'parents', 'owner', [ME])), ...(await rowsIn(env, 'parents', 'player', [ME]))], out.parents);
+  const children = Object.values(out.parents).filter((x) => x.parentId === ME).map((x) => x.playerId);
+  const childLinks = (await rowsIn(env, 'links', 'player', children)).filter((r) => JSON.parse(r.data).status === 'active');
+  toMap(childLinks, out.links);
+  toMap(await rowsIn(env, 'pcodes', 'owner', [ME]), out.pcodes);
   const people = new Set([ME]);
   Object.values(out.links).forEach((l) => { people.add(l.coachId); people.add(l.playerId); });
+  Object.values(out.parents).forEach((l) => { people.add(l.parentId); people.add(l.playerId); });
   toMap(await rowsIn(env, 'profiles', 'id', [...people]), out.profiles);
   toMap(await rowsIn(env, 'codes', 'coach', [ME]), out.codes);
   const drillCoaches = new Set([ME, ...coaches]);
-  Object.values(out.links).forEach((l) => { if (l.status === 'active' && players.includes(l.playerId)) drillCoaches.add(l.coachId); });
-  toMap(await rowsIn(env, 'drills', 'id', [ME, ...players, ...[...drillCoaches].map((c) => 'c_' + c)]), out.drills);
-  const scope = [ME, ...players];
+  Object.values(out.links).forEach((l) => { if (l.status === 'active' && (players.includes(l.playerId) || children.includes(l.playerId))) drillCoaches.add(l.coachId); });
+  toMap(await rowsIn(env, 'drills', 'id', [ME, ...players, ...children, ...[...drillCoaches].map((c) => 'c_' + c)]), out.drills);
+  const scope = [ME, ...players, ...children];
   toMap(await rowsIn(env, 'logs', 'player', scope), out.logs);
   toMap(await rowsIn(env, 'rounds', 'player', scope), out.rounds);
   toMap(await rowsIn(env, 'feedback', 'player', [ME]), out.feedback);
   toMap(await rowsIn(env, 'feedback', 'coach', [ME]), out.feedback);
   const shared = players.filter((p) => out.profiles[p] && out.profiles[p].share);
   toMap(await rowsIn(env, 'feedback', 'player', shared), out.feedback);
+  toMap(await rowsIn(env, 'feedback', 'player', children), out.feedback);
+  toMap(await rowsIn(env, 'lessons', 'coach', [ME]), out.lessons);
+  toMap(await rowsIn(env, 'lessons', 'player', [ME, ...children, ...shared]), out.lessons);
   toMap(await rowsIn(env, 'reports', 'owner', [ME]), out.reports);
   return out;
 }
@@ -171,7 +185,7 @@ async function write(env, ME, b) {
       const name = str(data.name, 30).trim() || cur.name || '이름 없음';
       await putDoc(env, 'profiles', ME, {
         name, share: !!data.share, field: cur.field || FIELD,
-        coach: !!cur.coach, code: cur.code || null, createdAt: cur.createdAt || Date.now(),
+        coach: !!cur.coach, code: cur.code || null, parent: !!cur.parent, pcode: cur.pcode || null, createdAt: cur.createdAt || Date.now(),
       }, { owner: ME });
       return J({ ok: true });
     }
@@ -208,6 +222,14 @@ async function write(env, ME, b) {
       await putDoc(env, col, id, {
         playerId: ME, date: isDate(data.date) ? data.date : new Date().toISOString().slice(0, 10),
         course: str(data.course, 80), holes, misses: (data.misses || []).slice(0, 40).map((m) => str(m, 40)),
+        kind: data.kind === 'match' ? 'match' : 'practice',
+        match: data.kind === 'match' ? {
+          name: str(data.match && data.match.name, 80),
+          round: ['1R', '2R', '3R', '4R'].includes(data.match && data.match.round) ? data.match.round : '1R',
+          rank: str(data.match && data.match.rank, 6).replace(/[^0-9]/g, ''),
+          field: str(data.match && data.match.field, 6).replace(/[^0-9]/g, ''),
+          tension: Math.max(0, Math.min(5, +(data.match && data.match.tension) || 0)),
+        } : null,
         memo: str(data.memo, 3000), createdAt: (cur && cur.createdAt) || data.createdAt || Date.now(), updatedAt: Date.now(),
       }, { player: ME });
       return J({ ok: true });
@@ -228,9 +250,39 @@ async function write(env, ME, b) {
       if (!id.startsWith(ME + '__')) return deny();
       if (del) { await delDoc(env, col, id); return J({ ok: true }); }
       const playerId = str(data.playerId, 60);
-      if (playerId !== ME && !(await isActivePlayer(env, ME, playerId))) return deny();
+      if (playerId !== ME && !(await isActivePlayer(env, ME, playerId)) && !(await isParentOf(env, ME, playerId))) return deny();
       await putDoc(env, col, id, { viewerId: ME, playerId, key: str(data.key, 20), text: str(data.text, 8000), createdAt: Date.now() }, { owner: ME, player: playerId });
       return J({ ok: true });
+    }
+    case 'lessons': {
+      if (!/^l[a-z0-9]{4,40}$/.test(id)) return deny();
+      const cur = await getDoc(env, col, id);
+      if (del) {
+        if (!cur) return J({ ok: true });
+        if (cur.coachId !== ME) return deny();
+        await delDoc(env, col, id); return J({ ok: true });
+      }
+      if (cur && cur.playerId === ME && cur.coachId !== ME) {
+        await putDoc(env, col, id, { ...cur, playerNote: str(data.playerNote, 2000), noteAt: Date.now() }, { coach: cur.coachId, player: cur.playerId });
+        return J({ ok: true });
+      }
+      if (cur && cur.coachId !== ME) return deny();
+      const playerId = str(data.playerId, 60);
+      if (!(await isActivePlayer(env, ME, playerId))) return fail('연결된 선수에게만 레슨을 기록할 수 있어요.', 403);
+      await putDoc(env, col, id, {
+        coachId: ME, playerId, date: isDate(data.date) ? data.date : new Date().toISOString().slice(0, 10),
+        topics: (Array.isArray(data.topics) ? data.topics : []).filter((t) => LESSON_TOPICS.includes(t)),
+        content: str(data.content, 4000), homework: str(data.homework, 1000),
+        playerNote: cur ? cur.playerNote || '' : '', createdAt: (cur && cur.createdAt) || Date.now(), updatedAt: Date.now(),
+      }, { coach: ME, player: playerId });
+      return J({ ok: true });
+    }
+    case 'parents': {
+      const cur = await getDoc(env, col, id);
+      if (!del) return deny();
+      if (!cur) return J({ ok: true });
+      if (cur.parentId !== ME && cur.playerId !== ME) return deny();
+      await delDoc(env, col, id); return J({ ok: true });
     }
     case 'links': {
       const cur = await getDoc(env, col, id);
@@ -254,7 +306,7 @@ async function makeCode(env, ME) {
   for (let t = 0; t < 10; t++) {
     const b = new Uint8Array(6); crypto.getRandomValues(b);
     code = [...b].map((x) => A[x % A.length]).join('');
-    if (!(await getDoc(env, 'codes', code))) break;
+    if (!(await getDoc(env, 'codes', code)) && !(await getDoc(env, 'pcodes', code))) break;
   }
   await env.DB.prepare("DELETE FROM docs WHERE col='codes' AND coach=?").bind(ME).run();
   await putDoc(env, 'codes', code, { coachId: ME, createdAt: Date.now() }, { coach: ME });
@@ -265,7 +317,10 @@ async function makeCode(env, ME) {
 async function joinCode(env, ME, b) {
   const code = str(b.code, 10).toUpperCase().replace(/\s/g, '');
   const c = code && (await getDoc(env, 'codes', code));
-  if (!c) return fail('코드를 찾지 못했어요. 다시 확인해 주세요.', 404);
+  if (!c) {
+    if (code && (await getDoc(env, 'pcodes', code))) return fail('학부모 연결 코드예요. 코치에게 받은 코드를 입력해 주세요.', 404);
+    return fail('코드를 찾지 못했어요. 다시 확인해 주세요.', 404);
+  }
   if (c.coachId === ME) return fail('내 코드예요. 자기 자신과는 연결할 수 없어요.');
   const id = c.coachId + '__' + ME;
   const ex = await getDoc(env, 'links', id);
@@ -273,6 +328,37 @@ async function joinCode(env, ME, b) {
   await putDoc(env, 'links', id, { coachId: c.coachId, playerId: ME, status: 'pending', createdAt: Date.now() }, { coach: c.coachId, player: ME });
   const p = await getDoc(env, 'profiles', c.coachId);
   return J({ ok: true, coachName: p ? p.name : '' });
+}
+
+async function makePcode(env, ME) {
+  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code;
+  for (let t = 0; t < 10; t++) {
+    const b = new Uint8Array(6); crypto.getRandomValues(b);
+    code = [...b].map((x) => A[x % A.length]).join('');
+    if (!(await getDoc(env, 'pcodes', code)) && !(await getDoc(env, 'codes', code))) break;
+  }
+  await env.DB.prepare("DELETE FROM docs WHERE col='pcodes' AND owner=?").bind(ME).run();
+  await putDoc(env, 'pcodes', code, { playerId: ME, createdAt: Date.now() }, { owner: ME });
+  const p = (await getDoc(env, 'profiles', ME)) || {};
+  await putDoc(env, 'profiles', ME, { ...p, pcode: code }, { owner: ME });
+  return J({ code });
+}
+async function joinParent(env, ME, b) {
+  const code = str(b.code, 10).toUpperCase().replace(/\s/g, '');
+  const c = code && (await getDoc(env, 'pcodes', code));
+  if (!c) {
+    if (code && (await getDoc(env, 'codes', code))) return fail('코치 초대 코드예요. 자녀에게 받은 학부모 코드를 입력해 주세요.', 404);
+    return fail('코드를 찾지 못했어요. 다시 확인해 주세요.', 404);
+  }
+  if (c.playerId === ME) return fail('내 코드예요. 자기 자신과는 연결할 수 없어요.');
+  const id = ME + '__' + c.playerId;
+  if (await getDoc(env, 'parents', id)) return fail('이미 연결된 자녀예요.', 409);
+  await putDoc(env, 'parents', id, { parentId: ME, playerId: c.playerId, status: 'active', createdAt: Date.now() }, { owner: ME, player: c.playerId });
+  const me = (await getDoc(env, 'profiles', ME)) || {};
+  await putDoc(env, 'profiles', ME, { ...me, parent: true }, { owner: ME });
+  const p = await getDoc(env, 'profiles', c.playerId);
+  return J({ ok: true, childName: p ? p.name : '' });
 }
 
 async function ai(env, userId, b) {
@@ -320,6 +406,8 @@ export async function onRequest({ request: req, env, params }) {
     if (path === '/docs' && m === 'POST') return await write(env, ME, await body(req));
     if (path === '/code' && m === 'POST') return await makeCode(env, ME);
     if (path === '/join' && m === 'POST') return await joinCode(env, ME, await body(req));
+    if (path === '/pcode' && m === 'POST') return await makePcode(env, ME);
+    if (path === '/pjoin' && m === 'POST') return await joinParent(env, ME, await body(req));
     if (path === '/ai' && m === 'POST') return await ai(env, user.id, await body(req));
     return fail('없는 경로예요.', 404);
   } catch (e) {
