@@ -222,6 +222,7 @@ async function write(env, ME, b) {
       await putDoc(env, col, id, {
         playerId: ME, date: isDate(data.date) ? data.date : new Date().toISOString().slice(0, 10),
         course: str(data.course, 80), holes, misses: (data.misses || []).slice(0, 40).map((m) => str(m, 40)),
+        mentalScore: Math.max(0, Math.min(5, Math.round(+data.mentalScore || 0))),
         kind: data.kind === 'match' ? 'match' : 'practice',
         match: data.kind === 'match' ? {
           name: str(data.match && data.match.name, 80),

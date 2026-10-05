@@ -179,8 +179,9 @@ textarea{min-height:88px}
 .kpi .l{font-size:12.5px;color:var(--muted);margin-top:4px}
 .tags h4{margin:14px 0 8px;font-size:13px;font-weight:700}
 .tag{height:34px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--card);font-size:13.5px;font-weight:500;margin:0 6px 6px 0}
-.tag.on{background:var(--flag);border-color:var(--flag);color:#fff;font-weight:700}
-.tag.good.on{background:var(--green);border-color:var(--green)}
+.tag.on{background:var(--under);border-color:var(--under);color:#fff;font-weight:700}
+.tag.good{color:var(--green);border-color:var(--green);font-weight:800}
+.tag.good.on{background:var(--green);border-color:var(--green);color:#fff}
 
 .editbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:25;background:var(--paper);display:flex;justify-content:space-between;align-items:center;padding:12px 18px;max-width:560px;margin:0 auto}
 .editbar .t{font-weight:700}
@@ -196,7 +197,7 @@ textarea{min-height:88px}
 .pnav button{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--card);display:grid;place-items:center}
 .pnav button svg{width:16px;height:16px}
 .bars{display:flex;align-items:flex-end;gap:3px;height:80px;padding-top:6px}
-.bars div{flex:1;background:var(--line);border-radius:3px 3px 0 0;position:relative;min-height:3px}
+.bars div{flex:1;height:100%;background:var(--green-2);border-radius:3px 3px 0 0;position:relative;min-height:3px}
 .bars div b{position:absolute;left:0;right:0;bottom:0;background:var(--green);border-radius:3px 3px 0 0}
 .bars div.fut{opacity:.35}
 .barlbl{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px;font-family:'Barlow Condensed',sans-serif}
@@ -208,7 +209,7 @@ textarea{min-height:88px}
 .hbar .track b{display:block;height:100%;background:var(--green)}
 .miss{display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
 .miss:first-child{border-top:0}
-.miss b{font-family:'Barlow Condensed',sans-serif;font-size:18px;color:var(--flag)}
+.miss b{font-family:'Barlow Condensed',sans-serif;font-size:18px;color:var(--under)}
 .ai{background:var(--ink);color:var(--on-ink);border-radius:16px;padding:18px;margin-top:10px}
 .ai h3{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:8px}
 .ai h3 svg{width:18px;height:18px}
@@ -338,10 +339,12 @@ textarea{min-height:88px}
 .mthumb .play{position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:22px;text-shadow:0 1px 6px rgba(0,0,0,.6)}
 .mdel{position:absolute;top:5px;right:5px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;display:grid;place-items:center}
 .mdel svg{width:14px;height:14px}
+input.mfile{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:0;z-index:2}
+.mmsg{font-size:13px;font-weight:700;color:#E0322A;margin-top:8px}
 label.mitem{cursor:pointer;border:1.5px dashed var(--line);background:var(--card)}
 .madd{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12.5px;color:var(--muted);font-weight:700}
 .madd b{font-size:26px;line-height:1;font-weight:400}
-.mup{position:absolute;inset:0;display:grid;place-items:center;font-size:12.5px;color:var(--muted);border:1.5px dashed var(--line);border-radius:10px}
+.mup{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:6px;line-height:1.35;font-size:12.5px;color:var(--muted);border:1.5px dashed var(--line);border-radius:10px}
 .viewer{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.94);display:flex;align-items:center;justify-content:center;padding:calc(56px + env(safe-area-inset-top,0px)) 12px calc(24px + env(safe-area-inset-bottom,0px))}
 .viewer img,.viewer video{max-width:100%;max-height:100%;border-radius:8px}
 .vclose{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:12px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;display:grid;place-items:center}
@@ -385,6 +388,8 @@ const MISS={
 };
 const FIELD={id:'golf',label:'GOLF'};
 const GOOD='굿샷';
+const isGood=m=>m===GOOD||/:굿$/.test(m);
+const goodCat=m=>m===GOOD?'기타':m.split(':')[0];
 const COLS=['profiles','links','codes','drills','logs','rounds','feedback','reports','lessons','parents','pcodes'];
 const LESSON_TOPICS=['스윙','숏게임','퍼팅','코스 매니지먼트','멘탈'];
 const WD=['일','월','화','수','목','금','토'];
@@ -484,7 +489,7 @@ const S={
   mode:lsGet('sn_mode','player'),tab:null,date:today(),period:'week',anchor:today(),
   reportPlayer:null,inboxFilter:'pending',inboxPlayer:'all',
   round:null,roundRO:false,roundSnap:null,hole:0,
-  lesson:null,lessonSnap:null,uploading:0,newKeys:[],viewer:null,rkind:'all',lessonPlayer:'all',child:null,
+  lesson:null,lessonSnap:null,mediaMsg:'',upMsg:'',uploading:0,newKeys:[],viewer:null,rkind:'all',lessonPlayer:'all',child:null,
   loading:true,drafts:{},dd:{},dlg:null,defaultName:'',authMode:'login',authBusy:false,authErr:'',
   ai:{busy:false,key:null,text:''}
 };
@@ -749,14 +754,21 @@ function vRoundEdit(){
     const notes=r.holes.map((hh,i)=>hh.note?'<div class="miss"><span>'+(i+1)+'번 홀</span><span class="muted" style="text-align:right">'+esc(hh.note)+'</span></div>':'').join('');
     if(notes)x+='<h2>샷 메모</h2><div class="card">'+notes+'</div>';
   }
-  const gOn=(r.misses||[]).includes(GOOD);
-  x+='<h2>미스 샷 원인 <small>'+(r.misses||[]).filter(m=>m!==GOOD).length+'개 선택</small></h2><div class="tags">';
-  x+='<h4>성공</h4><button class="tag good'+(gOn?' on':'')+'" data-act="miss" data-v="'+GOOD+'"'+(ro?' disabled':'')+' aria-pressed="'+gOn+'">굿샷</button>';
-  Object.keys(MISS).forEach(cat=>{
-    x+='<h4>'+cat+'</h4>'+MISS[cat].map(m=>{const k=cat+':'+m,on=(r.misses||[]).includes(k);return '<button class="tag'+(on?' on':'')+'" data-act="miss" data-v="'+esc(k)+'"'+(ro?' disabled':'')+'>'+m+'</button>';}).join('');
-  });
+  const ms=r.misses||[],shotMs=ms.filter(m=>!m.startsWith('멘탈:')),gN=shotMs.filter(isGood).length,mN=shotMs.length-gN;
+  const tagRow=cat=>{const gk=cat+':굿',gon=ms.includes(gk);
+    return '<button class="tag good'+(gon?' on':'')+'" data-act="miss" data-v="'+esc(gk)+'"'+(ro?' disabled':'')+' aria-pressed="'+gon+'">굿</button>'+MISS[cat].map(m=>{const k=cat+':'+m,on=ms.includes(k);return '<button class="tag'+(on?' on':'')+'" data-act="miss" data-v="'+esc(k)+'"'+(ro?' disabled':'')+' aria-pressed="'+on+'">'+m+'</button>';}).join('');};
+  x+='<h2>샷 분석 <small>굿 '+gN+'개, 미스 '+mN+'개</small></h2><div class="tags">';
+  Object.keys(MISS).filter(c=>c!=='멘탈').forEach(cat=>{x+='<h4>'+cat+'</h4>'+tagRow(cat);});
   x+='</div>';
-  x+='<h2>라운드 메모</h2><textarea data-field="r-memo" placeholder="코스 컨디션, 느낀 점"'+(ro?' disabled':'')+'>'+esc(r.memo||'')+'</textarea>';
+  const msc=+r.mentalScore||0;
+  x+='<h2>라운드 총평 <small>18홀을 마친 뒤 적어요</small></h2><div class="card">'+
+    '<div class="row"><div class="k">멘탈 점수</div><div class="pills">'+[1,2,3,4,5].map(v=>'<button class="pill'+(msc===v?' on':'')+'" data-act="mscore" data-v="'+v+'"'+(ro?' disabled':'')+'><span class="num">'+v+'</span></button>').join('')+'<span class="muted" style="font-size:12px;align-self:center">1 흔들림 ~ 5 최고</span></div></div>'+
+    '<div class="row tags"><div class="k">오늘 멘탈</div>'+tagRow('멘탈')+'</div>'+
+    '<div class="row" style="margin:0"><div class="k">총평</div><textarea data-field="r-memo" placeholder="잘된 점, 아쉬운 점, 전반과 후반의 멘탈 흐름, 다음 라운드에서 바꿀 것" style="min-height:120px"'+(ro?' disabled':'')+'>'+esc(r.memo||'')+'</textarea></div></div>';
+  if(false)Object.keys(MISS).forEach(cat=>{
+    const gk=cat+':굿',gon=ms.includes(gk);
+    x+='<h4>'+cat+'</h4><button class="tag good'+(gon?' on':'')+'" data-act="miss" data-v="'+esc(gk)+'"'+(ro?' disabled':'')+' aria-pressed="'+gon+'">굿</button>'+MISS[cat].map(m=>{const k=cat+':'+m,on=(r.misses||[]).includes(k);return '<button class="tag'+(on?' on':'')+'" data-act="miss" data-v="'+esc(k)+'"'+(ro?' disabled':'')+'>'+m+'</button>';}).join('');
+  });
   x+=fbHtml(fbsFor('round',r.id,r.playerId));
   if(ro&&mine)x+='<button class="btn" data-act="editround">이 '+kn+' 수정하기</button>';
   if(!ro){
@@ -774,7 +786,8 @@ function range(){
 }
 function rstat(list){
   const st=list.map(rs).filter(s=>s.n>0),sum=k=>st.reduce((a,s)=>a+s[k],0),full=st.filter(s=>s.n===18);
-  return{count:list.length,avg:full.length?(full.reduce((a,s)=>a+s.tot,0)/full.length).toFixed(1):null,
+  const mm=list.map(r=>+r.mentalScore||0).filter(Boolean);
+  return{mental:mm.length?(mm.reduce((a,b)=>a+b,0)/mm.length).toFixed(1):null,count:list.length,avg:full.length?(full.reduce((a,s)=>a+s.tot,0)/full.length).toFixed(1):null,
     putt:st.length?(sum('putt')/sum('n')*18).toFixed(1):null,fw:pct(sum('fw'),sum('fwN')),gir:pct(sum('gir'),sum('n')),rec:pct(sum('rec'),sum('recN')),has:st.length>0};
 }
 function compute(p){
@@ -790,14 +803,15 @@ function compute(p){
   const tc={};lessons.forEach(l=>(l.topics||[]).forEach(x=>{tc[x]=(tc[x]||0)+1;}));
   const rounds=allRounds().filter(r=>r.playerId===p&&r.date>=R.s&&r.date<=R.e).sort((a,b)=>a.date.localeCompare(b.date));
   const rnd=rstat(rounds),rp=rstat(rounds.filter(r=>KIND(r)!=='match')),rm=rstat(rounds.filter(r=>KIND(r)==='match'));
-  const mc={};let goodN=0;rounds.forEach(r=>(r.misses||[]).forEach(m=>{if(m===GOOD){goodN++;return;}mc[m]=(mc[m]||0)+1;}));
+  const mc={},gc={};let goodN=0;rounds.forEach(r=>(r.misses||[]).forEach(m=>{if(isGood(m)){goodN++;const c=goodCat(m);gc[c]=(gc[c]||0)+1;return;}mc[m]=(mc[m]||0)+1;}));
+  const goods=Object.keys(MISS).concat(['기타']).filter(c=>gc[c]).map(c=>[c,gc[c]]);
   const misses=Object.entries(mc).sort((a,b)=>b[1]-a[1]);
   const fbs=[];
   pdays.forEach(x=>fbsFor('log',logId(p,x.d),p).forEach(f=>fbs.push(Object.assign({},f,{type:'연습',memo:x.L.memo||''}))));
   lessons.forEach(l=>fbsFor('lesson',l.id,p).forEach(f=>fbs.push(Object.assign({},f,{type:'레슨',memo:l.content||''}))));
   rounds.forEach(r=>fbsFor('round',r.id,p).forEach(f=>fbs.push(Object.assign({},f,{type:KIND(r)==='match'?'시합':'라운드',memo:r.memo||''}))));
   fbs.sort((a,b)=>a.date.localeCompare(b.date));
-  return{R,daily,pastN:pdays.length,completion,active,perDrill,rounds,rnd,rp,rm,misses,fbs,items:base,goodN,lessons,topics:Object.entries(tc).sort((a,b)=>b[1]-a[1]),hw:{done:hwDone,tot:hwTot}};
+  return{R,daily,pastN:pdays.length,completion,active,perDrill,rounds,rnd,rp,rm,misses,fbs,items:base,goodN,goods,lessons,topics:Object.entries(tc).sort((a,b)=>b[1]-a[1]),hw:{done:hwDone,tot:hwTot}};
 }
 function reportPlayer(){
   if(S.mode==='parent'){const ks=childrenOf(ME);if(!ks.includes(S.child))S.child=ks[0]||null;return S.child;}
@@ -845,12 +859,15 @@ function vReport(){
       const P=C.rp,M=C.rm,gap=(P.avg&&M.avg)?(M.avg-P.avg):null;
       if(gap!=null)h+='<div class="card cmphead"><div class="v num'+(gap>0?'':' under')+'">'+(gap>0?'+':'')+gap.toFixed(1)+'</div><div class="l">시합에서 연습보다 '+(gap>0?'더 친 타수':'덜 친 타수')+'</div></div>';
       const row=(l,a,b,u,low)=>{const d=(a!=null&&b!=null)?(+b-+a):null;return '<div class="cmprow"><span>'+l+'</span><b class="num">'+(a==null?'–':a+u)+'</b><b class="num">'+(b==null?'–':b+u)+'</b><i class="num'+(d==null||d===0?'':((low?d<0:d>0)?' up':' down'))+'">'+(d==null?'':(d>0?'+':'')+(Math.round(d*10)/10))+'</i></div>';};
-      h+='<div class="card cmp" style="margin-top:8px"><div class="cmprow hd"><span></span><b>연습</b><b>시합</b><i>차이</i></div>'+row('평균 스코어',P.avg,M.avg,'',true)+row('평균 퍼트',P.putt,M.putt,'',true)+row('페어웨이',P.fw,M.fw,'%',false)+row('그린 적중',P.gir,M.gir,'%',false)+'</div>';
+      h+='<div class="card cmp" style="margin-top:8px"><div class="cmprow hd"><span></span><b>연습</b><b>시합</b><i>차이</i></div>'+row('평균 스코어',P.avg,M.avg,'',true)+row('평균 퍼트',P.putt,M.putt,'',true)+row('페어웨이',P.fw,M.fw,'%',false)+row('그린 적중',P.gir,M.gir,'%',false)+row('멘탈 점수',P.mental,M.mental,'',false)+'</div>';
     }else{
       const X=C.rp.has?C.rp:C.rm;
-      h+='<div class="kpis" style="margin-top:0"><div class="kpi"><div class="v num">'+(X.avg||'–')+'</div><div class="l">평균 스코어 (18홀, '+(C.rp.has?'연습':'시합')+')</div></div><div class="kpi"><div class="v num">'+X.putt+'</div><div class="l">18홀 기준 평균 퍼트</div></div><div class="kpi"><div class="v num">'+X.fw+'<small>%</small></div><div class="l">페어웨이 안착률</div></div><div class="kpi"><div class="v num">'+X.gir+'<small>%</small></div><div class="l">그린 적중률</div></div></div>';
+      h+='<div class="kpis" style="margin-top:0"><div class="kpi"><div class="v num">'+(X.avg||'–')+'</div><div class="l">평균 스코어 (18홀, '+(C.rp.has?'연습':'시합')+')</div></div><div class="kpi"><div class="v num">'+X.putt+'</div><div class="l">18홀 기준 평균 퍼트</div></div><div class="kpi"><div class="v num">'+X.fw+'<small>%</small></div><div class="l">페어웨이 안착률</div></div><div class="kpi"><div class="v num">'+X.gir+'<small>%</small></div><div class="l">그린 적중률</div></div>'+(X.mental?'<div class="kpi"><div class="v num">'+X.mental+'<small>/5</small></div><div class="l">평균 멘탈 점수</div></div>':'')+'</div>';
     }
-    if(C.goodN)h+='<h2>굿샷</h2><div class="card" style="padding:4px 16px"><div class="miss"><span>굿샷을 체크한 라운드</span><b style="color:var(--green)">'+C.goodN+'회</b></div></div>';
+    if(C.goodN){
+      const mx=Math.max(...C.goods.map(x=>x[1]));
+      h+='<h2>굿 <small>총 '+C.goodN+'개</small></h2><div class="card" style="padding:6px 16px">'+C.goods.map(x=>'<div class="hbar"><span class="nm">'+esc(x[0])+'</span><span class="p num" style="color:var(--green)">'+x[1]+'</span><div class="track"><b style="width:'+Math.round(x[1]/mx*100)+'%"></b></div></div>').join('')+'</div>';
+    }
     if(C.misses.length)h+='<h2>자주 나온 미스 원인</h2><div class="card" style="padding:4px 16px">'+C.misses.slice(0,6).map(m=>'<div class="miss"><span>'+esc(m[0].replace(':',' / '))+'</span><b>'+m[1]+'회</b></div>').join('')+'</div>';
   }else h+='<div class="empty">이 기간에 기록한 라운드가 없어요.</div>';
   h+='<h2>'+(coach?'피드백':'받은 피드백')+' <small>'+C.fbs.length+'개</small></h2>';
@@ -887,7 +904,7 @@ async function demoSummary(C,coach){
   if(R.has&&R.fw>=50)good.push('• 페어웨이 안착률 '+R.fw+'%로 티샷이 안정적이에요.');
   if(R.has&&R.gir>=40)good.push('• 그린 적중률 '+R.gir+'%로 아이언 샷이 잘 맞고 있어요.');
   if(C.hw.tot&&pct(C.hw.done,C.hw.tot)>=70)good.push('• 레슨 숙제를 '+pct(C.hw.done,C.hw.tot)+'% 해냈어요.');
-  if(C.goodN)good.push('• 라운드 '+C.rounds.length+'회 중 '+C.goodN+'회 굿샷 느낌을 남겼어요.');
+  if(C.goodN)good.push('• 라운드에서 굿을 '+C.goodN+'개 남겼어요('+C.goods.map(x=>x[0]+' '+x[1]).join(', ')+').');
   if(!good.length)good.push('• 기록을 시작한 것 자체가 좋은 출발이에요. 매일 체크하는 습관부터 만들어 봐요.');
   L.push(...good.slice(0,3));
   L.push('','보완할 점');
@@ -895,6 +912,7 @@ async function demoSummary(C,coach){
   const bad=low.map(x=>'• '+x.name+' 항목은 '+x.days+'/'+C.pastN+'일('+x.pc+'%)만 체크했어요.');
   if(C.hw.tot&&pct(C.hw.done,C.hw.tot)<50)bad.push('• 레슨 숙제 수행률이 '+pct(C.hw.done,C.hw.tot)+'%로 낮아요.');
   if(C.rp.avg&&C.rm.avg&&C.rm.avg-C.rp.avg>=3)bad.push('• 시합에서 연습보다 '+(C.rm.avg-C.rp.avg).toFixed(1)+'타 더 쳐서, 실전 긴장 관리가 과제예요.');
+  if(C.rp.mental&&C.rm.mental&&C.rm.mental<C.rp.mental-0.4)bad.push('• 시합 멘탈 점수가 '+C.rm.mental+'점으로 연습 라운드('+C.rp.mental+'점)보다 낮아요.');
   if(R.has&&+R.putt>=33)bad.push('• 18홀 기준 평균 퍼트가 '+R.putt+'개로 많은 편이에요.');
   if(C.misses.length)bad.push('• 가장 많이 나온 미스 원인은 '+C.misses[0][0].replace(':',' / ')+'('+C.misses[0][1]+'회)예요.');
   if(!bad.length)bad.push('• 크게 빠진 항목이 없어요. 지금 리듬을 유지해 봐요.');
@@ -923,8 +941,8 @@ async function runAI(){
     항목별체크일수:C.perDrill.map(x=>'['+x.group+'] '+x.name+': '+x.days+'/'+C.pastN),
     일별:C.daily.filter(x=>!x.fut&&(x.done||x.L.memo)).map(x=>({날짜:x.d,완료:x.done+'/'+C.items.length,빠진항목:C.items.filter(i=>!isChk(x.L,i)).map(i=>i.name),메모:x.L.memo||''})),
     레슨:C.lessons.map(l=>({날짜:l.date,코치:lessonCoach(l),주제:l.topics||[],내용:l.content,숙제:hwLines(l),사진영상수:(l.media||[]).length,코치피드백:fbsFor('lesson',l.id,l.playerId).map(f=>f.text)})),숙제수행:C.hw.done+'/'+C.hw.tot,
-    라운드:C.rounds.map(r=>{const s=rs(r);return{종류:KIND(r)==='match'?'시합':'연습',대회:KIND(r)==='match'?r.match:null,날짜:r.date,코스:r.course,홀수:s.n,스코어:s.tot,파대비:vsPar(s.vs),퍼트:s.putt,페어웨이:s.fw+'/'+s.fwN,GIR:s.gir+'/'+s.n,리커버리:s.rec+'/'+s.recN,미스원인:r.misses||[],메모:r.memo||'',샷메모:r.holes.map((h,i)=>h.note?(i+1)+'번홀 '+h.note:'').filter(Boolean)};}),
-    라운드평균:{연습:C.rp,시합:C.rm},미스원인빈도:C.misses,
+    라운드:C.rounds.map(r=>{const s=rs(r);return{종류:KIND(r)==='match'?'시합':'연습',대회:KIND(r)==='match'?r.match:null,날짜:r.date,코스:r.course,홀수:s.n,스코어:s.tot,파대비:vsPar(s.vs),퍼트:s.putt,페어웨이:s.fw+'/'+s.fwN,GIR:s.gir+'/'+s.n,리커버리:s.rec+'/'+s.recN,멘탈점수:r.mentalScore||null,총평:r.memo||'',굿:(r.misses||[]).filter(isGood).map(goodCat),미스원인:(r.misses||[]).filter(m=>!isGood(m)),메모:r.memo||'',샷메모:r.holes.map((h,i)=>h.note?(i+1)+'번홀 '+h.note:'').filter(Boolean)};}),
+    라운드평균:{연습:C.rp,시합:C.rm},굿빈도:C.goods,미스원인빈도:C.misses,
     피드백:C.fbs.map(f=>({날짜:f.date,종류:f.type,작성:f.coachId===ME?'나':cName(f.coachId)+'',내용:f.text}))
   };
   const who=coach?'이 리포트를 보는 사람은 이 선수의 코치('+pName(ME)+')야. "작성: 나"인 피드백과 "[내가 배정한 항목]"을 중심으로, 이 코치가 다음에 무엇을 지도하면 좋을지 관점에서 정리해.':parent?'이 리포트를 보는 사람은 선수의 학부모야. 전문 용어를 줄이고, 아이가 잘한 점과 집에서 응원할 방법 위주로 따뜻하게 정리해.':'이 리포트를 보는 사람은 선수 본인이야. 여러 코치의 피드백을 합쳐서, 공통으로 지적된 점과 코치별 강조점을 구분해 정리해.';
@@ -978,10 +996,10 @@ function vInbox(){
       b='<div class="body"><b class="num" style="font-size:22px">'+doneOf(it.o,items)+'/'+items.length+'</b> 완료'+(mineItems.length?' <span class="muted">(내 배정 '+doneOf(it.o,mineItems)+'/'+mineItems.length+')</span>':'')+(miss.length?'<div class="muted" style="font-size:13px">빠진 항목: '+esc(miss.join(', '))+'</div>':'')+(it.o.memo?'<div class="memo">'+esc(it.o.memo)+'</div>':'')+'</div>';
     }else{
       const s=rs(it.o);
-      b='<div class="body">'+kindBadge(it.o)+' <b>'+esc(rTitle(it.o))+'</b> <b class="num'+(s.vs<0?' under':'')+'" style="font-size:22px">'+(s.tot||'–')+' '+(s.n?vsPar(s.vs):'')+'</b><div class="muted" style="font-size:13px">FW '+s.fw+'/'+s.fwN+', GIR '+s.gir+'/'+s.n+', 퍼트 '+s.putt+'</div>'+
+      b='<div class="body">'+kindBadge(it.o)+' <b>'+esc(rTitle(it.o))+'</b> <b class="num'+(s.vs<0?' under':'')+'" style="font-size:22px">'+(s.tot||'–')+' '+(s.n?vsPar(s.vs):'')+'</b><div class="muted" style="font-size:13px">FW '+s.fw+'/'+s.fwN+', GIR '+s.gir+'/'+s.n+', 퍼트 '+s.putt+(it.o.mentalScore?', 멘탈 '+it.o.mentalScore+'/5':'')+'</div>'+
         '<div class="mini">'+it.o.holes.slice(0,9).map(shape).join('')+'</div><div class="mini">'+it.o.holes.slice(9).map(shape).join('')+'</div>'+
-        ((it.o.misses||[]).includes(GOOD)?'<div style="font-size:13px;margin-top:8px;color:var(--green);font-weight:700">굿샷 체크</div>':'')+
-        ((it.o.misses||[]).filter(m=>m!==GOOD).length?'<div class="muted" style="font-size:13px;margin-top:8px">미스 원인: '+esc(it.o.misses.filter(m=>m!==GOOD).map(m=>m.split(':')[1]).join(', '))+'</div>':'')+
+        ((it.o.misses||[]).some(isGood)?'<div style="font-size:13px;margin-top:8px;color:var(--green);font-weight:700">굿: '+esc(it.o.misses.filter(isGood).map(goodCat).join(', '))+'</div>':'')+
+        ((it.o.misses||[]).filter(m=>!isGood(m)).length?'<div class="muted" style="font-size:13px;margin-top:8px">미스 원인: '+esc(it.o.misses.filter(m=>!isGood(m)).map(m=>m.split(':')[1]).join(', '))+'</div>':'')+
         (it.o.memo?'<div class="memo">'+esc(it.o.memo)+'</div>':'')+'</div>';
     }
     const others=fbsFor(it.kind,it.id,it.p).filter(f=>f.coachId!==ME);
@@ -1022,8 +1040,8 @@ function mediaHtml(list,edit){
     (m.type==='video'?'<button class="mthumb" data-act="viewmedia" data-k="'+esc(m.key)+'" data-t="video" aria-label="영상 보기"><video src="'+mediaUrl(m.key)+'#t=0.1" preload="metadata" muted playsinline></video><span class="play">▶</span></button>'
       :'<button class="mthumb" data-act="viewmedia" data-k="'+esc(m.key)+'" data-t="image" aria-label="사진 크게 보기"><img src="'+mediaUrl(m.key)+'" loading="lazy" alt="레슨 사진"></button>')+
     (edit?'<button class="mdel" data-act="mdel" data-v="'+i+'" aria-label="삭제">'+I.x+'</button>':'')+'</div>').join('')+
-    (edit&&S.uploading?'<div class="mitem"><div class="mup">올리는 중…</div></div>':'')+
-    (edit&&list.length+S.uploading<6?'<label class="mitem"><span class="madd"><b>+</b>사진·영상</span><input type="file" accept="image/*,video/*" data-field="mfile" hidden></label>':'')+'</div>';
+    (edit&&S.uploading?'<div class="mitem"><div class="mup" id="mup">'+esc(S.upMsg||'올리는 중…')+'</div></div>':'')+
+    (edit&&list.length+S.uploading<6?'<label class="mitem"><span class="madd"><b>+</b>사진·영상</span><input type="file" class="mfile" accept="image/*,video/*" data-field="mfile" aria-label="사진이나 영상 추가"></label>':'')+'</div>';
 }
 function lessonCard(l,viewer){
   const hw=hwLines(l);
@@ -1072,7 +1090,7 @@ function vLessonEdit(){
   x+='<div class="row"><div class="k">주제 (여러 개 선택 가능)</div><div class="pills">'+LESSON_TOPICS.map(t=>'<button class="pill'+(l.topics.includes(t)?' on':'')+'" data-act="ltopic" data-v="'+esc(t)+'">'+esc(t)+'</button>').join('')+'</div></div>';
   x+='<div class="row"><div class="k">오늘 배운 내용</div><textarea data-field="l-content" placeholder="예: 백스윙 탑에서 왼손목 각도 유지. 다운스윙 시작을 하체로." style="min-height:120px">'+esc(l.content)+'</textarea></div>';
   x+='<div class="row"><div class="k">숙제 <span class="muted">(한 줄에 하나씩, 2주 동안 체크리스트에 매일 표시)</span></div><textarea data-field="l-hw" placeholder="예:&#10;하프스윙 왼손목 고정 50개&#10;거울 보고 탑 자세 3분">'+esc(l.homework)+'</textarea></div>';
-  x+='<div class="row"><div class="k">사진·영상 <span class="muted">(최대 6개, 영상은 10초 미만)</span></div>'+mediaHtml(l.media,true)+'</div>';
+  x+='<div class="row"><div class="k">사진·영상 <span class="muted">(최대 6개, 영상은 10초 미만)</span></div>'+mediaHtml(l.media,true)+(S.mediaMsg?'<div class="mmsg" role="alert">'+esc(S.mediaMsg)+'</div>':'')+'</div>';
   x+='<button class="btn" data-act="savelesson"'+(S.uploading?' disabled':'')+'>'+(S.uploading?'올리는 중이에요…':(isNew?'레슨 저장':'수정 내용 저장'))+'</button>';
   if(!isNew)x+='<button class="btn danger" data-act="dellesson" data-v="'+esc(l.id)+'">이 레슨 삭제</button>';
   return x+'</main>';
@@ -1080,11 +1098,13 @@ function vLessonEdit(){
 function videoDuration(file){
   return new Promise(res=>{
     const v=document.createElement('video'),u=URL.createObjectURL(file);let done=false;
-    const fin=d=>{if(done)return;done=true;URL.revokeObjectURL(u);res(d);};
-    v.preload='metadata';v.muted=true;v.playsInline=true;
-    v.onloadedmetadata=()=>fin(isFinite(v.duration)?v.duration:null);
-    v.onerror=()=>fin(null);setTimeout(()=>fin(null),10000);
-    v.src=u;
+    v.style.cssText='position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0';
+    const fin=d=>{if(done)return;done=true;try{v.remove();}catch(e){}URL.revokeObjectURL(u);res(d);};
+    const check=()=>{if(isFinite(v.duration)&&v.duration>0)fin(v.duration);};
+    v.preload='metadata';v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');
+    v.addEventListener('loadedmetadata',check);v.addEventListener('durationchange',check);v.addEventListener('canplay',check);
+    v.onerror=()=>fin(null);setTimeout(()=>fin(null),12000);
+    document.body.appendChild(v);v.src=u;try{v.load();}catch(e){}
   });
 }
 function shrinkImage(file){
@@ -1100,32 +1120,91 @@ function shrinkImage(file){
     img.src=u;
   });
 }
+function mErr(m){S.mediaMsg=m;toast(m);render();}
+function setUp(t){S.upMsg=t;const el=document.getElementById('mup');if(el)el.textContent=t;}
+function pickMime(){
+  const c=['video/mp4;codecs=avc1.42E01E','video/mp4;codecs=avc1.4D401F','video/mp4;codecs=avc1','video/webm;codecs=vp8','video/webm;codecs=vp9','video/webm','video/mp4'];
+  return c.find(t=>{try{return MediaRecorder.isTypeSupported(t);}catch(e){return false;}})||'';
+}
+function canRecode(){return typeof MediaRecorder!=='undefined'&&typeof HTMLCanvasElement!=='undefined'&&!!HTMLCanvasElement.prototype.captureStream;}
+// 영상을 720p로 다시 만들어 용량을 줄여요(소리는 빼요). 실패하면 null.
+function recodeVideo(file,onp){
+  return new Promise(res=>{
+    const v=document.createElement('video'),u=URL.createObjectURL(file);let finished=false,rec=null,raf=0,guard=0;
+    v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');v.setAttribute('muted','');v.preload='auto';
+    v.style.cssText='position:fixed;left:0;top:0;width:4px;height:4px;opacity:0.01;pointer-events:none;z-index:-1';
+    const done=b=>{if(finished)return;finished=true;cancelAnimationFrame(raf);clearTimeout(guard);try{v.pause();v.remove();}catch(e){}URL.revokeObjectURL(u);res(b);};
+    v.onerror=()=>done(null);
+    v.onloadedmetadata=async()=>{
+      try{
+        const M=720,vw=v.videoWidth||720,vh=v.videoHeight||1280,sc=Math.min(1,M/Math.max(vw,vh));
+        const w=Math.max(2,Math.round(vw*sc/2)*2),h=Math.max(2,Math.round(vh*sc/2)*2);
+        const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');
+        g.fillStyle='#000';g.fillRect(0,0,w,h);
+        const mime=pickMime(),stream=c.captureStream(30);
+        rec=new MediaRecorder(stream,mime?{mimeType:mime,videoBitsPerSecond:2500000}:{videoBitsPerSecond:2500000});
+        const chunks=[];rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data);};
+        rec.onstop=()=>{const type=((rec.mimeType||mime||'video/webm').split(';')[0])||'video/webm';const b=new Blob(chunks,{type});done(b.size>20000?b:null);};
+        const draw=()=>{try{g.drawImage(v,0,0,w,h);}catch(e){}if(onp&&v.duration)onp(Math.min(1,v.currentTime/v.duration));if(!v.ended)raf=requestAnimationFrame(draw);};
+        v.onended=()=>{try{g.drawImage(v,0,0,w,h);}catch(e){}setTimeout(()=>{if(rec.state!=='inactive')rec.stop();},200);};
+        rec.start(250);
+        await v.play();
+        draw();
+        guard=setTimeout(()=>{try{if(rec.state!=='inactive')rec.stop();else done(null);}catch(e){done(null);}},((v.duration||10)+6)*1000);
+      }catch(e){try{if(rec&&rec.state!=='inactive')rec.stop();}catch(x){}done(null);}
+    };
+    document.body.appendChild(v);v.src=u;try{v.load();}catch(e){}
+  });
+}
+function uploadBlob(url,blob,type,onp){
+  return new Promise((res,rej)=>{
+    const x=new XMLHttpRequest();
+    x.open('POST',url);x.withCredentials=true;x.timeout=180000;x.setRequestHeader('content-type',type);
+    x.upload.onprogress=e=>{if(e.lengthComputable&&onp)onp(e.loaded/e.total);};
+    x.onload=()=>{let j={};try{j=JSON.parse(x.responseText);}catch(e){}
+      if(x.status>=200&&x.status<300)res(j);else{const er=new Error((j.error||'올리지 못했어요.')+' (오류 '+x.status+')');er.http=x.status;rej(er);}};
+    x.onerror=x.ontimeout=()=>rej(new Error('인터넷 연결이 불안정해서 올리지 못했어요. 와이파이에서 다시 시도해 주세요.'));
+    x.send(blob);
+  });
+}
 async function addMedia(file){
   const l=S.lesson;if(!l||!file)return;
-  if(l.media.length+S.uploading>=6){toast('사진·영상은 6개까지 올릴 수 있어요.');return;}
+  S.mediaMsg='';
+  if(l.media.length+S.uploading>=6){mErr('사진·영상은 6개까지 올릴 수 있어요.');return;}
   const name=(file.name||'').toLowerCase();
-  let type=file.type||'';
-  if(!type)type=/\.mov$/.test(name)?'video/quicktime':/\.(mp4|m4v)$/.test(name)?'video/mp4':/\.webm$/.test(name)?'video/webm':/\.(jpe?g)$/.test(name)?'image/jpeg':/\.png$/.test(name)?'image/png':'';
+  let type=(file.type||'').toLowerCase();
+  if(!type)type=/\.mov$/.test(name)?'video/quicktime':/\.(mp4|m4v)$/.test(name)?'video/mp4':/\.webm$/.test(name)?'video/webm':/\.(jpe?g)$/.test(name)?'image/jpeg':/\.png$/.test(name)?'image/png':/\.(heic|heif)$/.test(name)?'image/heic':'';
   let blob=file;
-  if(type.startsWith('image/')){
-    blob=await shrinkImage(file);type=blob.type||'image/jpeg';
-    if(!/^image\/(jpeg|png|webp|gif)$/.test(type)){toast('이 사진 형식은 올릴 수 없어요.');return;}
-  }else if(type.startsWith('video/')){
-    if(type==='video/x-m4v')type='video/mp4';
-    const d=await videoDuration(file);
-    if(d==null){toast('영상 길이를 확인하지 못했어요. 다른 영상을 골라 주세요.');return;}
-    if(d>=10){toast('10초 미만 영상만 올릴 수 있어요. (지금 '+d.toFixed(1)+'초)');return;}
-    if(file.size>40*1024*1024){toast('영상 용량이 너무 커요. 40MB 이하로 올려 주세요.');return;}
-  }else{toast('사진이나 영상 파일만 올릴 수 있어요.');return;}
-  S.uploading++;render();
+  S.uploading++;setUp('준비 중…');render();
   try{
-    const r=await fetch('/api/media?lesson='+encodeURIComponent(l.id),{method:'POST',credentials:'same-origin',headers:{'content-type':type},body:blob});
-    let j={};try{j=await r.json();}catch(e){}
-    if(!r.ok)throw new Error(j.error||'올리지 못했어요. 잠시 뒤 다시 시도해 주세요.');
+    if(type.startsWith('image/')){
+      blob=await shrinkImage(file);type=(blob.type||'').toLowerCase();
+      if(!/^image\/(jpeg|png|webp|gif)$/.test(type))throw new Error('이 사진 형식('+(type||'알 수 없음')+')은 올릴 수 없어요. 아이폰이라면 설정 > 카메라 > 포맷에서 "높은 호환성"을 고르거나, 스크린샷으로 올려 주세요.');
+    }else if(type.startsWith('video/')){
+      if(type==='video/x-m4v')type='video/mp4';
+      setUp('영상 확인 중…');
+      const d=await videoDuration(file);
+      if(d==null)throw new Error('영상 길이를 확인하지 못했어요. 사진 앱에서 영상을 10초 미만으로 잘라서 다시 올려 주세요.');
+      if(d>=10)throw new Error('10초 미만 영상만 올릴 수 있어요. 지금 영상은 '+d.toFixed(1)+'초예요. 사진 앱의 편집에서 잘라서 올려 주세요.');
+      let small=null;
+      if(canRecode()){setUp('영상 줄이는 중 0%');small=await recodeVideo(file,p=>setUp('영상 줄이는 중 '+Math.round(p*100)+'%'));}
+      if(small&&small.size<file.size){blob=small;type=small.type||'video/webm';}
+      else{
+        if(!/^video\/(mp4|quicktime|webm)$/.test(type))throw new Error('이 영상 형식('+type+')은 올릴 수 없어요. mp4나 mov 영상을 골라 주세요.');
+        if(file.size>40*1024*1024)throw new Error('영상 용량이 너무 커요('+Math.round(file.size/1048576)+'MB). 아이폰은 설정 > 카메라 > 비디오 녹화를 1080p로 바꾸고 찍어 주세요.');
+      }
+    }else throw new Error('사진이나 영상 파일만 올릴 수 있어요.');
+    const url='/api/media?lesson='+encodeURIComponent(l.id);
+    let j=null;
+    for(let t=0;t<2&&!j;t++){
+      try{setUp('올리는 중 0%');j=await uploadBlob(url,blob,type,p=>setUp('올리는 중 '+Math.round(p*100)+'%'));}
+      catch(e){if(t===1||e.http)throw e;setUp('다시 시도 중…');await new Promise(r=>setTimeout(r,1500));}
+    }
     if(S.lesson&&S.lesson.id===l.id){S.lesson.media.push({key:j.key,type:j.type});S.newKeys.push(j.key);}
     else API.req('/media/'+j.key,{method:'DELETE'}).catch(()=>{});
-  }catch(e){toast(e.message);}
-  S.uploading=Math.max(0,S.uploading-1);render();
+    S.mediaMsg='';
+  }catch(e){S.mediaMsg=e.message;toast(e.message);}
+  S.uploading=Math.max(0,S.uploading-1);S.upMsg='';render();
 }
 function dropNewMedia(){S.newKeys.forEach(k=>API.req('/media/'+k,{method:'DELETE'}).catch(()=>{}));S.newKeys=[];}
 
@@ -1248,11 +1327,12 @@ document.addEventListener('click',async e=>{
     case'hole':S.hole=+v;render();break;
     case'rk':S.rkind=v;render();break;
     case'rkind':r.kind=v;r.match=r.match||{name:'',round:'1R',rank:'',field:'',tension:0};render();break;
+    case'mscore':r.mentalScore=+r.mentalScore===+v?0:+v;render();break;
     case'mround':r.match.round=v;render();break;
     case'mtension':r.match.tension=+r.match.tension===+v?0:+v;render();break;
     case'kid':S.child=v;S.ai={busy:false,key:null,text:''};render();break;
     case'lpf':S.lessonPlayer=v;render();break;
-    case'newlesson':S.lesson=newLesson();S.newKeys=[];S.lessonSnap=JSON.stringify(S.lesson);render();try{window.scrollTo(0,0);}catch(e){}break;
+    case'newlesson':S.mediaMsg='';S.lesson=newLesson();S.newKeys=[];S.lessonSnap=JSON.stringify(S.lesson);render();try{window.scrollTo(0,0);}catch(e){}break;
     case'editlesson':{const src=Store.data.lessons[v];if(!src)break;const o=JSON.parse(JSON.stringify(src));o.id=v;o.topics=o.topics||[];o.media=o.media||[];o.coachId=o.coachId||'';o.coachName=o.coachName||'';S.lesson=o;S.newKeys=[];S.lessonSnap=JSON.stringify(o);render();try{window.scrollTo(0,0);}catch(e){}break;}
     case'closelesson':
       if(JSON.stringify(S.lesson)===S.lessonSnap&&!S.newKeys.length){S.lesson=null;render();break;}
