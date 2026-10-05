@@ -115,7 +115,7 @@ textarea{min-height:88px}
 .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:52px;border-radius:12px;background:var(--ink);color:var(--on-ink);font-weight:700;font-size:16px;margin-top:14px}
 .btn.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
 .btn.sm{height:42px;font-size:14px;width:auto;padding:0 16px;margin:0}
-.btn.danger{background:transparent;color:var(--flag);border:1.5px solid var(--flag-2)}
+.btn.danger{background:transparent;color:#E0322A;border:1.5px solid #F5C2BE}
 .btn[disabled]{opacity:.5;cursor:default}
 .status{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);margin-top:12px}
 .dot{width:8px;height:8px;border-radius:50%;background:var(--sand)}
@@ -349,6 +349,27 @@ label.mitem{cursor:pointer;border:1.5px dashed var(--line);background:var(--card
 .viewer img,.viewer video{max-width:100%;max-height:100%;border-radius:8px}
 .vclose{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:12px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;display:grid;place-items:center}
 .vclose svg{width:20px;height:20px}
+.agwrap{margin-top:24px;border-top:1px solid #E4E7EC;padding-top:12px}
+.agrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.agck{display:flex;align-items:center;gap:10px;padding:9px 0;font-size:14.5px;font-weight:600;color:#0B0B0C;text-align:left}
+.agck.agall{font-weight:900;font-size:15.5px;padding:6px 0 10px;border-bottom:1px solid #E4E7EC;width:100%;margin-bottom:4px}
+.agbox{width:22px;height:22px;border-radius:6px;border:2px solid #D0D5DD;display:grid;place-items:center;flex:none;transition:all .15s}
+.agbox svg{width:14px;height:14px;color:#fff;opacity:0}
+.agck.on .agbox{background:#0B0B0C;border-color:#0B0B0C}
+.agck.on .agbox svg{opacity:1}
+.agview{font-size:13px;color:#8E8E93;text-decoration:underline;padding:6px 2px;flex:none}
+.agage{display:flex;gap:8px;margin-top:10px}
+.agage button{flex:1;height:44px;border-radius:10px;border:1.5px solid #E4E7EC;font-weight:700;font-size:14px;color:#667085;background:#fff}
+.agage button.on{border-color:#0B0B0C;color:#0B0B0C;background:#F3F4F6}
+.agg{margin-top:12px;background:#F6F7F9;border-radius:12px;padding:12px}
+.agg p{margin:0 0 8px;font-size:13px;color:#667085;font-weight:600}
+.agg input{height:48px}
+.onb .foot button{font:inherit;color:inherit}
+.tview{position:fixed;inset:0;z-index:95;background:#fff;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px)}
+.tbar{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-bottom:1px solid #E4E7EC;color:#111418}
+.tbar button{font-weight:800;color:#1F5EFF;padding:6px}
+.tview iframe{flex:1;border:0;width:100%}
+.bizinfo{margin-top:24px;font-size:11.5px;color:var(--muted);line-height:1.7;text-align:center}
 .fbo{font-size:12.5px;color:var(--muted);margin-top:8px}
 </style>
 </head>
@@ -390,7 +411,8 @@ const FIELD={id:'golf',label:'GOLF'};
 const GOOD='굿샷';
 const isGood=m=>m===GOOD||/:굿$/.test(m);
 const goodCat=m=>m===GOOD?'기타':m.split(':')[0];
-const COLS=['profiles','links','codes','drills','logs','rounds','feedback','reports','lessons','parents','pcodes'];
+const COLS=['profiles','links','codes','drills','logs','rounds','feedback','reports','lessons','parents','pcodes','consents'];
+const TERMS_VERSION='2026-10-draft';
 const LESSON_TOPICS=['스윙','숏게임','퍼팅','코스 매니지먼트','멘탈'];
 const WD=['일','월','화','수','목','금','토'];
 const I={
@@ -490,7 +512,7 @@ const S={
   reportPlayer:null,inboxFilter:'pending',inboxPlayer:'all',
   round:null,roundRO:false,roundSnap:null,hole:0,
   lesson:null,lessonSnap:null,mediaMsg:'',upMsg:'',uploading:0,newKeys:[],viewer:null,rkind:'all',lessonPlayer:'all',child:null,
-  loading:true,drafts:{},dd:{},dlg:null,defaultName:'',authMode:'login',authBusy:false,authErr:'',
+  loading:true,drafts:{},dd:{},dlg:null,defaultName:'',ag:{},termsView:null,withdraw:false,authMode:'login',authBusy:false,authErr:'',
   ai:{busy:false,key:null,text:''}
 };
 
@@ -603,6 +625,7 @@ function render(){
   let html;
   if(!USER){html=vAuth();}
   else if(!prof(ME)){html=vOnboard();}
+  else if(!(Store.data.consents[ME]&&Store.data.consents[ME].version===TERMS_VERSION)){html=vConsent();}
   else{
     if(S.mode==='coach'&&!coachEnabled())S.mode='player';
     if(S.mode==='parent'&&!parentEnabled())S.mode='player';
@@ -610,6 +633,7 @@ function render(){
     if(!valid.includes(S.tab))S.tab=valid[0];
     html=S.round?vRoundEdit():S.lesson?vLessonEdit():header()+'<main class="wrap">'+view()+'</main>'+tabbar();
   }
+  if(S.termsView)html+='<div class="tview" role="dialog" aria-label="약관 및 정책"><div class="tbar"><b>약관 및 정책</b><button data-act="closeterms">닫기</button></div><iframe src="/terms#'+S.termsView+'" title="약관 및 정책"></iframe></div>';
   if(S.viewer)html+='<div class="viewer" data-act="closeviewer" role="dialog" aria-label="크게 보기"><button class="vclose" data-act="closeviewer" aria-label="닫기">'+I.x+'</button>'+(S.viewer.type==='video'?'<video src="'+mediaUrl(S.viewer.key)+'" controls autoplay playsinline></video>':'<img src="'+mediaUrl(S.viewer.key)+'" alt="레슨 사진">')+'</div>';
   if(S.dlg)html+='<div class="dlg" role="alertdialog" aria-modal="true"><div class="box2"><p>'+esc(S.dlg.msg)+'</p><div class="acts2"><button class="btn ghost" data-act="dlgno">취소</button><button class="btn" data-act="dlgok" style="'+(S.dlg.danger?'background:#E0322A;color:#fff':'')+'">'+esc(S.dlg.ok||'확인')+'</button></div></div></div>';
   app.innerHTML=html;
@@ -643,16 +667,34 @@ function tabbar(){
 }
 
 /* ---------- onboarding ---------- */
+function agOk(){const a=S.ag;if(!a.terms||!a.privacy||!a.overseas)return false;if(a.age==='14+')return true;if(a.age==='u14')return !!((a.gname||'').trim()&&(a.gphone||'').replace(/[^0-9]/g,'').length>=9&&a.gok);return false;}
+function authReady(){const su=S.authMode==='signup',D=S.drafts;return !!((D.email||'').trim()&&(D.pw||'').length>=(su?8:1)&&(!su||((D.name||'').trim()&&agOk())));}
+function agBlock(){
+  const a=S.ag,all=a.terms&&a.privacy&&a.overseas;
+  const row=(k,label,view)=>'<div class="agrow"><button class="agck'+(a[k]?' on':'')+'" data-act="ag" data-v="'+k+'" aria-pressed="'+!!a[k]+'"><span class="agbox">'+I.check+'</span>'+label+'</button>'+(view?'<button class="agview" data-act="terms" data-v="'+view+'">보기</button>':'')+'</div>';
+  return '<div class="agwrap"><button class="agck agall'+(all?' on':'')+'" data-act="agall" aria-pressed="'+!!all+'"><span class="agbox">'+I.check+'</span>필수 약관 전체 동의</button>'+
+    row('terms','[필수] 서비스 이용약관','terms')+row('privacy','[필수] 개인정보 수집·이용','privacy')+row('overseas','[필수] 개인정보 국외 이전(서버 운영)','overseas')+
+    '<div class="agage"><button class="'+(a.age==='14+'?'on':'')+'" data-act="agage" data-v="14+">만 14세 이상이에요</button><button class="'+(a.age==='u14'?'on':'')+'" data-act="agage" data-v="u14">만 14세 미만이에요</button></div>'+
+    (a.age==='u14'?'<div class="agg"><p>만 14세 미만은 보호자의 동의가 필요해요.</p><input type="text" data-field="ag-gname" value="'+esc(a.gname||'')+'" placeholder="보호자 이름" autocomplete="off"><input type="text" data-field="ag-gphone" value="'+esc(a.gphone||'')+'" placeholder="보호자 휴대폰 번호" inputmode="tel" autocomplete="off" style="margin-top:8px">'+row('gok','[필수] 보호자가 위 약관에 동의했어요','')+'</div>':'')+'</div>';
+}
+function vConsent(){
+  return '<div class="onb"><div class="in"><span class="chipk">'+FIELD.label+'</span><h1 class="logo">FeedUp.</h1>'+
+    '<p style="font-weight:800;font-size:18px;margin:0 0 4px">약관 동의가 필요해요</p><p class="hint" style="margin:0 0 6px">계속 이용하려면 아래 내용에 동의해 주세요.</p>'+agBlock()+
+    (S.authErr?'<p class="hint" style="color:#E0322A;font-weight:700">'+esc(S.authErr)+'</p>':'')+
+    '<button class="go'+(agOk()?' ready':'')+'" data-act="consent"'+(S.authBusy?' disabled':'')+'>'+(S.authBusy?'잠시만요…':'동의하고 계속하기')+'</button>'+
+    '<div class="foot"><button data-act="logout"><b>로그아웃</b></button></div></div></div>';
+}
 function vAuth(){
   const su=S.authMode==='signup',D=S.drafts;
-  const ready=(D.email||'').trim()&&(D.pw||'').length>=(su?8:1)&&(!su||(D.name||'').trim());
+  const ready=authReady();
   return '<div class="onb"><div class="in"><span class="chipk">'+FIELD.label+'</span><h1 class="logo">FeedUp.</h1>'+
     (su?'<label for="aname">이름</label><input id="aname" type="text" data-field="name" value="'+esc(D.name||'')+'" placeholder="코치와 선수에게 보여요" autocomplete="name"><div style="height:22px"></div>':'')+
     '<label for="aemail">이메일</label><input id="aemail" type="email" data-field="email" value="'+esc(D.email||'')+'" placeholder="example@email.com" autocomplete="email" inputmode="email">'+
     '<div style="height:22px"></div><label for="apw">비밀번호</label><input id="apw" type="password" data-field="pw" value="'+esc(D.pw||'')+'" placeholder="'+(su?'8자 이상':'비밀번호')+'" autocomplete="'+(su?'new-password':'current-password')+'">'+
+    (su?agBlock():'')+
     (S.authErr?'<p class="hint" style="color:#E0322A;font-weight:700">'+esc(S.authErr)+'</p>':'')+
     '<button class="go'+(ready?' ready':'')+'" data-act="auth"'+(S.authBusy?' disabled':'')+'>'+(S.authBusy?'잠시만요…':(su?'가입하고 시작하기':'시작하기'))+'</button>'+
-    '<div class="foot">'+(su?'이미 계정이 있나요? <button data-act="authmode" data-v="login"><b>로그인</b></button>':'처음이신가요? <button data-act="authmode" data-v="signup"><b>회원가입</b></button>')+'</div></div></div>';
+    '<div class="foot">'+(su?'이미 계정이 있나요? <button data-act="authmode" data-v="login"><b>로그인</b></button>':'처음이신가요? <button data-act="authmode" data-v="signup"><b>회원가입</b></button>')+'</div><div class="foot" style="margin-top:14px;font-size:12.5px"><button data-act="terms" data-v="terms">이용약관</button> · <button data-act="terms" data-v="privacy">개인정보 처리방침</button></div></div></div>';
 }
 function vOnboard(){
   const v=S.drafts.name!=null?S.drafts.name:S.defaultName;
@@ -1256,6 +1298,10 @@ function vMe(){
     '<div class="addline"><input type="text" data-field="pjoin" placeholder="자녀에게 받은 코드 6자리" value="'+esc(S.drafts.pjoin||'')+'" autocapitalize="characters" maxlength="8"><button class="btn sm" data-act="pjoin">연결</button></div>'+
     (kl.length?'<div style="margin-top:10px">'+kl.map(l=>'<div class="prow"><span>'+esc(pName(l.playerId))+'</span><button class="rbtn del" data-act="unparent" data-v="'+esc(l.id)+'">연결 해제</button></div>').join('')+'</div>'+(S.mode!=='parent'?'<button class="btn" data-act="mode" data-v="parent">학부모 모드로 가기</button>':''):'')+'</div>';
   h+='<h2>계정</h2><div class="card"><p style="margin:0" class="muted">'+esc(USER?USER.email:'')+'</p><button class="btn ghost" data-act="logout">로그아웃</button></div>';
+  h+='<h2>약관 및 정책</h2><div class="card" style="padding:4px 16px">'+[['terms','서비스 이용약관'],['paid','유료서비스 이용약관 및 환불 규정'],['privacy','개인정보 처리방침']].map(x=>'<button class="prow" style="width:100%;text-align:left;font-weight:500" data-act="terms" data-v="'+x[0]+'"><span>'+x[1]+'</span>'+I.right.replace('<svg','<svg width="16" height="16"')+'</button>').join('')+'</div>';
+  if(!S.withdraw)h+='<button class="btn danger" data-act="wdopen" style="margin-top:22px">회원 탈퇴</button>';
+  else h+='<div class="card" style="margin-top:22px;border-color:#E0322A"><p style="margin:0 0 6px;font-weight:800">정말 탈퇴할까요?</p><p class="muted" style="margin:0 0 10px;font-size:13.5px">연습 체크, 레슨, 라운드 기록, 사진·영상, 받은 피드백, 코치·보호자 연결이 모두 삭제되고 되돌릴 수 없어요. 법령에 따라 보관해야 하는 결제 기록은 정해진 기간 동안 따로 보관돼요.</p><input type="password" data-field="wdpw" placeholder="비밀번호 확인" autocomplete="current-password"><div style="display:flex;gap:8px;margin-top:10px"><button class="btn ghost" data-act="wdcancel" style="margin:0">취소</button><button class="btn" data-act="withdraw" style="margin:0;background:#E0322A;color:#fff">탈퇴하기</button></div></div>';
+  h+='<div class="bizinfo">FeedUp · 대표자 [ ] · 사업자등록번호 [ ] · 통신판매업 신고번호 [ ]<br>주소 [ ] · 이메일 [ ] · 연락처 [ ]</div>';
   return h;
 }
 
@@ -1294,12 +1340,30 @@ document.addEventListener('click',async e=>{
       if(!n){toast('이름을 입력하세요.');break;}
       await Store.set('profiles',ME,{name:n,share:false,field:FIELD.id,createdAt:Date.now()});delete S.drafts.name;render();break;}
     case'authmode':S.authMode=v;S.authErr='';render();break;
+    case'ag':S.ag[v]=!S.ag[v];render();break;
+    case'agall':{const on=!(S.ag.terms&&S.ag.privacy&&S.ag.overseas);S.ag.terms=S.ag.privacy=S.ag.overseas=on;render();break;}
+    case'agage':S.ag.age=v;render();break;
+    case'terms':S.termsView=v;render();break;
+    case'closeterms':S.termsView=null;render();break;
+    case'consent':{
+      if(!agOk()){S.authErr='필수 항목에 모두 동의해 주세요.';render();break;}
+      S.authBusy=true;S.authErr='';render();
+      try{await API.req('/consent',{method:'POST',body:{agree:S.ag}});await Store.load();}catch(err){S.authErr=err.message;}
+      S.authBusy=false;render();break;}
+    case'wdopen':S.withdraw=true;render();break;
+    case'wdcancel':S.withdraw=false;delete S.drafts.wdpw;render();break;
+    case'withdraw':{
+      const pw=S.drafts.wdpw||'';if(!pw){toast('비밀번호를 입력해 주세요.');break;}
+      try{await API.req('/account/delete',{method:'POST',body:{password:pw}});toast('탈퇴가 완료됐어요.');setTimeout(()=>location.reload(),900);}
+      catch(err){toast(err.message);}
+      break;}
     case'auth':{
       if(S.authBusy)break;
       const su=S.authMode==='signup',D=S.drafts;
       S.authBusy=true;S.authErr='';render();
       try{
-        const j=await API.req(su?'/auth/signup':'/auth/login',{method:'POST',body:{email:D.email,password:D.pw,name:D.name}});
+        if(su&&!agOk())throw new Error('약관 동의와 나이 확인을 완료해 주세요.');
+        const j=await API.req(su?'/auth/signup':'/auth/login',{method:'POST',body:{email:D.email,password:D.pw,name:D.name,agree:su?S.ag:undefined}});
         USER=j.user;ME=j.me;delete D.pw;S.loading=true;render();
         await Store.load();S.loading=false;
       }catch(err){S.authErr=err.message;}
@@ -1407,6 +1471,8 @@ document.addEventListener('input',e=>{
   else if(f==='l-hw')S.lesson.homework=v;
   else if(f==='l-date'&&v)S.lesson.date=v;
   else if(f==='l-cname')S.lesson.coachName=v;
+  else if(f==='ag-gname')S.ag.gname=v;
+  else if(f==='ag-gphone')S.ag.gphone=v;
   else if(f==='mfile')return;
   else if(f==='r-date'&&v)S.round.date=v;
   else if(f==='r-memo')S.round.memo=v;
@@ -1415,8 +1481,9 @@ document.addEventListener('input',e=>{
   else if(f==='dn')S.dd[el.dataset.w][+el.dataset.i].name=v;
   else if(f==='dt')S.dd[el.dataset.w][+el.dataset.i].target=v;
   else S.drafts[f]=v;
+  if(['ag-gname','ag-gphone'].includes(f)){const b=document.querySelector('.onb .go');if(b)b.classList.toggle('ready',USER?agOk():authReady());}
   if(['name','email','pw'].includes(f)){const b=document.querySelector('.onb .go');if(b){
-    if(!USER){const su=S.authMode==='signup',D=S.drafts;b.classList.toggle('ready',!!((D.email||'').trim()&&(D.pw||'').length>=(su?8:1)&&(!su||(D.name||'').trim())));}
+    if(!USER)b.classList.toggle('ready',authReady());
     else b.classList.toggle('ready',!!v.trim());}}
 });
 document.addEventListener('change',e=>{const el=e.target;if(el.dataset&&el.dataset.field==='mfile'){const f=el.files&&el.files[0];el.value='';if(f)addMedia(f);return;}if(el.dataset&&el.dataset.field==='l-date'&&el.value&&S.lesson)S.lesson.date=el.value;if(el.dataset&&el.dataset.field==='r-date'&&el.value&&S.round)S.round.date=el.value;});

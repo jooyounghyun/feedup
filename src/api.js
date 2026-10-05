@@ -3,6 +3,7 @@
 // 선택: env.AI_ENABLED('true'일 때만 AI 호출), env.ANTHROPIC_MODEL, env.AI_DAILY_LIMIT
 
 const FIELD = 'golf';
+const TERMS_VERSION = '2026-10-draft';
 const SESS = 'fu_sess';
 const SESSION_DAYS = 30;
 const enc = new TextEncoder();
@@ -92,6 +93,17 @@ async function newSession(env, userId) {
     .bind(await sha(token), userId, Date.now() + SESSION_DAYS * 864e5).run();
   return sessCookie(token, SESSION_DAYS * 86400);
 }
+function checkAgree(a) {
+  a = a || {};
+  if (!a.terms || !a.privacy || !a.overseas) return { err: '필수 약관에 모두 동의해 주세요.' };
+  if (a.age === 'u14') {
+    const name = str(a.gname, 30).trim(), phone = str(a.gphone, 20).replace(/[^0-9]/g, '');
+    if (!name || phone.length < 9 || !a.gok) return { err: '만 14세 미만은 보호자 이름, 연락처, 보호자 동의가 필요해요.' };
+    return { ok: { version: TERMS_VERSION, terms: true, privacy: true, overseas: true, age14: false, guardian: { name, phone }, at: Date.now() } };
+  }
+  if (a.age !== '14+') return { err: '나이 확인에 체크해 주세요.' };
+  return { ok: { version: TERMS_VERSION, terms: true, privacy: true, overseas: true, age14: true, guardian: null, at: Date.now() } };
+}
 async function signup(req, env) {
   const b = await body(req);
   const email = str(b.email, 120).trim().toLowerCase();
@@ -100,6 +112,8 @@ async function signup(req, env) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('이메일 형식을 확인해 주세요.');
   if (pw.length < 8) return fail('비밀번호는 8자 이상이어야 해요.');
   if (!name) return fail('이름을 입력해 주세요.');
+  const ag = checkAgree(b.agree);
+  if (ag.err) return fail(ag.err);
   const ex = await env.DB.prepare('SELECT id FROM users WHERE email=?').bind(email).first();
   if (ex) return fail('이미 가입된 이메일이에요. 로그인해 주세요.', 409);
   const id = rand(8), salt = rand(16);
@@ -107,6 +121,7 @@ async function signup(req, env) {
     .bind(id, email, await hashPw(pw, salt), salt, Date.now()).run();
   const ME = 'u_' + id;
   await putDoc(env, 'profiles', ME, { name, share: false, field: FIELD, coach: false, createdAt: Date.now() }, { owner: ME });
+  await putDoc(env, 'consents', ME, ag.ok, { owner: ME });
   return J({ user: { id, email }, me: ME }, 200, { 'set-cookie': await newSession(env, id) });
 }
 async function login(req, env) {
@@ -125,7 +140,8 @@ async function logout(req, env) {
 
 /* ---------------- state (what this user may see) ---------------- */
 async function state(env, ME) {
-  const out = { profiles: {}, links: {}, codes: {}, drills: {}, logs: {}, rounds: {}, feedback: {}, reports: {}, lessons: {}, parents: {}, pcodes: {} };
+  const out = { profiles: {}, links: {}, codes: {}, drills: {}, logs: {}, rounds: {}, feedback: {}, reports: {}, lessons: {}, parents: {}, pcodes: {}, consents: {} };
+  toMap(await rowsIn(env, 'consents', 'owner', [ME]), out.consents);
   const mine = [...(await rowsIn(env, 'links', 'coach', [ME])), ...(await rowsIn(env, 'links', 'player', [ME]))];
   toMap(mine, out.links);
   const L = Object.values(out.links);
@@ -391,6 +407,35 @@ async function mediaDelete(env, ME, key) {
   return J({ ok: true });
 }
 
+async function giveConsent(env, ME, b) {
+  const ag = checkAgree(b.agree);
+  if (ag.err) return fail(ag.err);
+  await putDoc(env, 'consents', ME, ag.ok, { owner: ME });
+  return J({ ok: true });
+}
+async function deleteAccount(req, env, user) {
+  const b = await body(req);
+  const u = await env.DB.prepare('SELECT pass_hash,salt FROM users WHERE id=?').bind(user.id).first();
+  if (!u || !same(await hashPw(String(b.password || ''), u.salt), u.pass_hash)) return fail('비밀번호가 맞지 않아요.', 401);
+  const ME = 'u_' + user.id;
+  if (env.MEDIA) {
+    let cursor;
+    do {
+      const l = await env.MEDIA.list({ prefix: 'lessons/' + ME + '/', cursor });
+      const keys = l.objects.map((o) => o.key);
+      if (keys.length) await env.MEDIA.delete(keys);
+      cursor = l.truncated ? l.cursor : undefined;
+    } while (cursor);
+  }
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM docs WHERE owner=?1 OR player=?1 OR (coach=?1 AND col IN ('links','codes','feedback'))").bind(ME),
+    env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(user.id),
+    env.DB.prepare('DELETE FROM ai_usage WHERE user_id=?').bind(user.id),
+    env.DB.prepare('DELETE FROM users WHERE id=?').bind(user.id),
+  ]);
+  return J({ ok: true }, 200, { 'set-cookie': sessCookie('', 0) });
+}
+
 async function makePcode(env, ME) {
   const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code;
@@ -468,6 +513,8 @@ export async function onRequest({ request: req, env, params }) {
     if (path === '/code' && m === 'POST') return await makeCode(env, ME);
     if (path === '/join' && m === 'POST') return await joinCode(env, ME, await body(req));
     if (path === '/pcode' && m === 'POST') return await makePcode(env, ME);
+    if (path === '/consent' && m === 'POST') return await giveConsent(env, ME, await body(req));
+    if (path === '/account/delete' && m === 'POST') return await deleteAccount(req, env, user);
     if (path === '/media' && m === 'POST') return await mediaPut(req, env, ME, new URL(req.url));
     if (path.startsWith('/media/') && (m === 'GET' || m === 'HEAD')) return await mediaGet(req, env, ME, decodeURIComponent(path.slice(7)));
     if (path.startsWith('/media/') && m === 'DELETE') return await mediaDelete(env, ME, decodeURIComponent(path.slice(7)));
