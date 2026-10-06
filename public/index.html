@@ -537,14 +537,15 @@ const lessonsOf=p=>allLessons().filter(l=>l.playerId===p).sort((a,b)=>b.date.loc
 const lessonCoach=l=>l.coachId?(l.coachId===ME?'내 레슨':cName(l.coachId)):(l.coachName||'개인 레슨');
 const hwLines=l=>String(l.homework||'').split('\n').map(x=>x.trim()).filter(Boolean).slice(0,10);
 function hwGroups(p,d){
+  // 그날 기준 가장 최근 레슨의 숙제 하나만 보여줘요. 새 숙제가 생기면 이전 숙제는 사라지고, 레슨일부터 1주일(7일) 동안만 표시해요.
   if(!d)return[];
-  const by={};
+  let best=null;
   allLessons().forEach(l=>{
-    if(l.playerId!==p||!hwLines(l).length||l.date>d||addD(l.date,6)<d)return;
-    const k=l.coachId||'self',b=by[k];
-    if(!b||b.date<l.date||(b.date===l.date&&(b.createdAt||0)<(l.createdAt||0)))by[k]=l;
+    if(l.playerId!==p||!hwLines(l).length||l.date>d)return;
+    if(!best||best.date<l.date||(best.date===l.date&&(best.createdAt||0)<(l.createdAt||0)))best=l;
   });
-  return Object.values(by).map(l=>({owner:'hw',coachId:l.coachId,lesson:l,items:hwLines(l).map((x,i)=>({id:'hw'+i,name:x,target:'',key:'hw:'+l.id+':'+i,hw:true}))}));
+  if(!best||addD(best.date,6)<d)return[];
+  return [{owner:'hw',coachId:best.coachId,lesson:best,items:hwLines(best).map((x,i)=>({id:'hw'+i,name:x,target:'',key:'hw:'+best.id+':'+i,hw:true}))}];
 }
 function groups(p,d){
   const g=[{owner:'me',coachId:null,items:ownDrills(p).map(d=>Object.assign({},d,{key:'me:'+d.id,legacy:d.id}))}];
