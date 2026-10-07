@@ -436,6 +436,67 @@ async function deleteAccount(req, env, user) {
   return J({ ok: true }, 200, { 'set-cookie': sessCookie('', 0) });
 }
 
+/* ---------------- admin ---------------- */
+function isAdmin(env, user) {
+  const list = String(env.ADMIN_EMAILS || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+  return !!user && list.includes(String(user.email || '').toLowerCase());
+}
+async function adminOverview(env) {
+  const all = async (q, ...b) => ((await env.DB.prepare(q).bind(...b).all()).results || []);
+  const users = await all('SELECT id,email,created FROM users ORDER BY created DESC');
+  const docs = await all("SELECT col,id,data FROM docs WHERE col IN ('profiles','consents','links','parents')");
+  const P = {}, C = {}, links = [], parents = [];
+  docs.forEach((r) => {
+    const d = JSON.parse(r.data);
+    if (r.col === 'profiles') P[r.id] = d; else if (r.col === 'consents') C[r.id] = d;
+    else if (r.col === 'links') links.push(d); else parents.push(d);
+  });
+  const counts = {};
+  (await all('SELECT col,COUNT(*) AS n FROM docs GROUP BY col')).forEach((r) => { counts[r.col] = r.n; });
+  const matches = (await env.DB.prepare("SELECT COUNT(*) AS n FROM docs WHERE col='rounds' AND json_extract(data,'$.kind')='match'").first()).n;
+  const media = (await env.DB.prepare("SELECT COALESCE(SUM(json_array_length(data,'$.media')),0) AS n FROM docs WHERE col='lessons' AND json_type(data,'$.media')='array'").first()).n;
+  const act = {}, perUser = {};
+  (await all("SELECT player,col,COUNT(*) AS n,MAX(updated) AS last FROM docs WHERE col IN ('logs','rounds','lessons') AND player IS NOT NULL GROUP BY player,col")).forEach((r) => {
+    act[r.player] = Math.max(act[r.player] || 0, r.last);
+    (perUser[r.player] = perUser[r.player] || {})[r.col] = r.n;
+  });
+  const fbBy = {};
+  (await all("SELECT coach,COUNT(*) AS n,MAX(updated) AS last FROM docs WHERE col='feedback' GROUP BY coach")).forEach((r) => {
+    fbBy[r.coach] = r.n; act[r.coach] = Math.max(act[r.coach] || 0, r.last);
+  });
+  const members = users.map((u) => {
+    const me = 'u_' + u.id, p = P[me] || {}, c = C[me];
+    const asCoach = links.filter((l) => l.coachId === me), asPlayer = links.filter((l) => l.playerId === me);
+    const kids = parents.filter((x) => x.parentId === me), myParents = parents.filter((x) => x.playerId === me);
+    const pu = perUser[me] || {};
+    const isCoach = !!p.coach || asCoach.length > 0;
+    const isParent = !!p.parent || kids.length > 0;
+    const isPlayer = asPlayer.length > 0 || myParents.length > 0 || !!(pu.logs || pu.rounds || pu.lessons) || (!isCoach && !isParent);
+    return {
+      name: p.name || '(프로필 없음)', email: u.email, created: u.created, last: act[me] || null,
+      roles: [isPlayer && 'player', isCoach && 'coach', isParent && 'parent'].filter(Boolean),
+      under14: !!(c && c.age14 === false), consent: !!c,
+      players: asCoach.filter((l) => l.status === 'active').length, pending: asCoach.filter((l) => l.status === 'pending').length,
+      coaches: asPlayer.filter((l) => l.status === 'active').length, kids: kids.length, parents: myParents.length,
+      logs: pu.logs || 0, rounds: pu.rounds || 0, lessons: pu.lessons || 0, feedback: fbBy[me] || 0,
+    };
+  });
+  return J({
+    now: Date.now(), members,
+    totals: {
+      users: users.length,
+      players: members.filter((m) => m.roles.includes('player')).length,
+      coaches: members.filter((m) => m.roles.includes('coach')).length,
+      parents: members.filter((m) => m.roles.includes('parent')).length,
+      under14: members.filter((m) => m.under14).length,
+      active7: members.filter((m) => m.last && m.last > Date.now() - 7 * 864e5).length,
+      linksActive: links.filter((l) => l.status === 'active').length, linksPending: links.filter((l) => l.status === 'pending').length,
+      parentLinks: parents.length,
+      logs: counts.logs || 0, lessons: counts.lessons || 0, rounds: counts.rounds || 0, matches, feedback: counts.feedback || 0, media,
+    },
+  });
+}
+
 async function makePcode(env, ME) {
   const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code;
@@ -507,7 +568,8 @@ export async function onRequest({ request: req, env, params }) {
     if (!user) return fail('로그인이 필요해요.', 401);
     const ME = 'u_' + user.id;
 
-    if (path === '/me' && m === 'GET') return J({ user, me: ME });
+    if (path === '/me' && m === 'GET') return J({ user, me: ME, admin: isAdmin(env, user) });
+    if (path === '/admin/overview' && m === 'GET') return isAdmin(env, user) ? await adminOverview(env) : fail('관리자만 볼 수 있어요.', 403);
     if (path === '/state' && m === 'GET') return J(await state(env, ME));
     if (path === '/docs' && m === 'POST') return await write(env, ME, await body(req));
     if (path === '/code' && m === 'POST') return await makeCode(env, ME);

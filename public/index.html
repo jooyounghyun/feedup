@@ -1300,6 +1300,7 @@ function vMe(){
     '<div class="addline"><input type="text" data-field="pjoin" placeholder="자녀에게 받은 코드 6자리" value="'+esc(S.drafts.pjoin||'')+'" autocapitalize="characters" maxlength="8"><button class="btn sm" data-act="pjoin">연결</button></div>'+
     (kl.length?'<div style="margin-top:10px">'+kl.map(l=>'<div class="prow"><span>'+esc(pName(l.playerId))+'</span><button class="rbtn del" data-act="unparent" data-v="'+esc(l.id)+'">연결 해제</button></div>').join('')+'</div>'+(S.mode!=='parent'?'<button class="btn" data-act="mode" data-v="parent">학부모 모드로 가기</button>':''):'')+'</div>';
   h+='<h2>계정</h2><div class="card"><p style="margin:0" class="muted">'+esc(USER?USER.email:'')+'</p><button class="btn ghost" data-act="logout">로그아웃</button></div>';
+  if(S.admin)h+='<h2>관리자</h2><a class="btn" href="/admin" style="text-decoration:none">관리자 페이지 열기</a>';
   h+='<h2>약관 및 정책</h2><div class="card" style="padding:4px 16px">'+[['terms','서비스 이용약관'],['paid','유료서비스 이용약관 및 환불 규정'],['privacy','개인정보 처리방침']].map(x=>'<button class="prow" style="width:100%;text-align:left;font-weight:500" data-act="terms" data-v="'+x[0]+'"><span>'+x[1]+'</span>'+I.right.replace('<svg','<svg width="16" height="16"')+'</button>').join('')+'</div>';
   if(!S.withdraw)h+='<div style="text-align:center;margin-top:14px"><button class="wdlink" data-act="wdopen">회원 탈퇴</button></div>';
   else h+='<div class="card" style="margin-top:22px;border-color:#E0322A"><p style="margin:0 0 6px;font-weight:800">정말 탈퇴할까요?</p><p class="muted" style="margin:0 0 10px;font-size:13.5px">연습 체크, 레슨, 라운드 기록, 사진·영상, 받은 피드백, 코치·보호자 연결이 모두 삭제되고 되돌릴 수 없어요. 법령에 따라 보관해야 하는 결제 기록은 정해진 기간 동안 따로 보관돼요.</p><input type="password" data-field="wdpw" placeholder="비밀번호 확인" autocomplete="current-password"><div style="display:flex;gap:8px;margin-top:10px"><button class="btn ghost" data-act="wdcancel" style="margin:0">취소</button><button class="btn" data-act="withdraw" style="margin:0;background:#E0322A;color:#fff">탈퇴하기</button></div></div>';
@@ -1367,7 +1368,7 @@ document.addEventListener('click',async e=>{
         if(su&&!agOk())throw new Error('약관 동의와 나이 확인을 완료해 주세요.');
         const j=await API.req(su?'/auth/signup':'/auth/login',{method:'POST',body:{email:D.email,password:D.pw,name:D.name,agree:su?S.ag:undefined}});
         USER=j.user;ME=j.me;delete D.pw;S.loading=true;render();
-        await Store.load();S.loading=false;
+        await Store.load();try{S.admin=!!(await API.req('/me')).admin;}catch(e){}S.loading=false;
       }catch(err){S.authErr=err.message;}
       S.authBusy=false;render();break;}
     case'logout':ask('로그아웃할까요?','로그아웃',async()=>{try{await API.req('/auth/logout',{method:'POST'});}catch(e){}location.reload();});break;
@@ -1502,7 +1503,7 @@ async function boot(){
   render();
   try{
     const j=await API.req('/me');
-    USER=j.user;ME=j.me;
+    USER=j.user;ME=j.me;S.admin=!!j.admin;
     await Store.load();
   }catch(e){
     if(e.status!==401)toast(e.message||'서버에 연결하지 못했어요.');

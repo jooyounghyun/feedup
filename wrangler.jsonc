@@ -13,5 +13,6 @@
   "r2_buckets": [
     { "binding": "MEDIA", "bucket_name": "feedup-media" }
   ],
+  "keep_vars": true,
   "observability": { "enabled": true }
 }
