@@ -437,9 +437,14 @@ async function deleteAccount(req, env, user) {
 }
 
 /* ---------------- admin ---------------- */
-function isAdmin(env, user) {
+// 관리자: Cloudflare 런타임 변수 ADMIN_EMAILS 또는 D1의 admins 행으로 지정
+async function isAdmin(env, user) {
+  if (!user) return false;
+  const email = String(user.email || '').trim().toLowerCase();
   const list = String(env.ADMIN_EMAILS || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
-  return !!user && list.includes(String(user.email || '').toLowerCase());
+  if (list.includes(email)) return true;
+  const r = await env.DB.prepare("SELECT 1 AS ok FROM docs WHERE col='admins' AND lower(id)=?").bind(email).first();
+  return !!r;
 }
 async function adminOverview(env) {
   const all = async (q, ...b) => ((await env.DB.prepare(q).bind(...b).all()).results || []);
@@ -568,8 +573,8 @@ export async function onRequest({ request: req, env, params }) {
     if (!user) return fail('로그인이 필요해요.', 401);
     const ME = 'u_' + user.id;
 
-    if (path === '/me' && m === 'GET') return J({ user, me: ME, admin: isAdmin(env, user) });
-    if (path === '/admin/overview' && m === 'GET') return isAdmin(env, user) ? await adminOverview(env) : fail('관리자만 볼 수 있어요.', 403);
+    if (path === '/me' && m === 'GET') return J({ user, me: ME, admin: await isAdmin(env, user) });
+    if (path === '/admin/overview' && m === 'GET') return (await isAdmin(env, user)) ? await adminOverview(env) : fail('관리자만 볼 수 있어요.', 403);
     if (path === '/state' && m === 'GET') return J(await state(env, ME));
     if (path === '/docs' && m === 'POST') return await write(env, ME, await body(req));
     if (path === '/code' && m === 'POST') return await makeCode(env, ME);
