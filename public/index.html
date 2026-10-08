@@ -371,6 +371,29 @@ label.mitem{cursor:pointer;border:1.5px dashed var(--line);background:var(--card
 .tview iframe{flex:1;border:0;width:100%}
 .wdlink{font-size:13px;color:var(--muted);text-decoration:underline;text-underline-offset:3px;padding:8px 12px}
 .bizinfo{margin-top:24px;font-size:11.5px;color:var(--muted);line-height:1.7;text-align:center}
+.sgrp{border:1px solid var(--line);border-radius:14px;background:var(--card);overflow:hidden;margin-bottom:4px}
+.sgood{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--green-2)}
+.sgood .tag{margin:0;display:inline-flex;align-items:center;gap:5px;background:var(--card)}
+.sgood .tag.on{background:var(--green)}
+.sgood .tag svg{opacity:.35}
+.sgood .tag.on svg{opacity:1;color:#fff}
+.shint{font-size:12.5px;color:var(--green);font-weight:700}
+.smiss{padding:10px 12px 6px}
+.mlab{font-size:12.5px;font-weight:800;color:var(--under);margin:0 0 8px;display:flex;align-items:center;gap:6px}
+.mlab b{background:var(--under);color:#fff;border-radius:999px;font-size:11px;min-width:18px;height:18px;display:inline-grid;place-items:center;padding:0 5px}
+.mlab span{font-weight:500;color:var(--muted)}
+.tag.mtag:not(.on){border-style:dashed}
+.tags .sgrp+h4{margin-top:16px}
+.lockcard{background:var(--paper);border-style:dashed}
+.lk{display:flex;gap:10px;align-items:flex-start}
+.lk svg{flex:none;margin-top:2px}
+.lk b{display:block;font-size:14.5px}
+.lk span{font-size:12.5px;color:var(--muted)}
+.lprog{height:6px;border-radius:3px;background:var(--line);margin:14px 0 8px;overflow:hidden}
+.lprog i{display:block;height:100%;background:var(--green);border-radius:3px}
+.lrow{display:flex;justify-content:space-between;align-items:center}
+.lrow .num{font-size:18px;font-weight:700}
+.lrow .link{font-size:13px;color:var(--muted);text-decoration:underline;text-underline-offset:3px}
 .fbo{font-size:12.5px;color:var(--muted);margin-top:8px}
 </style>
 </head>
@@ -799,15 +822,23 @@ function vRoundEdit(){
     if(notes)x+='<h2>샷 메모</h2><div class="card">'+notes+'</div>';
   }
   const ms=r.misses||[],shotMs=ms.filter(m=>!m.startsWith('멘탈:')),gN=shotMs.filter(isGood).length,mN=shotMs.length-gN;
-  const tagRow=cat=>{const gk=cat+':굿',gon=ms.includes(gk);
-    return '<button class="tag good'+(gon?' on':'')+'" data-act="miss" data-v="'+esc(gk)+'"'+(ro?' disabled':'')+' aria-pressed="'+gon+'">굿</button>'+MISS[cat].map(m=>{const k=cat+':'+m,on=ms.includes(k);return '<button class="tag'+(on?' on':'')+'" data-act="miss" data-v="'+esc(k)+'"'+(ro?' disabled':'')+' aria-pressed="'+on+'">'+m+'</button>';}).join('');};
+  const tagRow=(cat,missLabel)=>{const gk=cat+':굿',gon=ms.includes(gk),mc=MISS[cat].filter(m=>ms.includes(cat+':'+m)).length;
+    return '<div class="sgrp">'+
+      '<div class="sgood"><button class="tag good'+(gon?' on':'')+'" data-act="miss" data-v="'+esc(gk)+'"'+(ro?' disabled':'')+' aria-pressed="'+gon+'">'+I.check.replace('<svg','<svg width="14" height="14"')+'굿</button><span class="shint">'+(cat==='멘탈'?(gon?'멘탈 굿으로 기록했어요':'흔들림 없이 잘 버텼다면 굿'):(gon?'잘 된 샷으로 기록했어요':'잘 맞았다면 굿'))+'</span></div>'+
+      '<div class="smiss"><div class="mlab">'+(missLabel||'미스 원인')+(mc?' <b>'+mc+'</b>':'')+'<span>해당하는 것 모두</span></div>'+
+      MISS[cat].map(m=>{const k=cat+':'+m,on=ms.includes(k);return '<button class="tag mtag'+(on?' on':'')+'" data-act="miss" data-v="'+esc(k)+'"'+(ro?' disabled':'')+' aria-pressed="'+on+'">'+m+'</button>';}).join('')+'</div></div>';};
   x+='<h2>샷 분석 <small>굿 '+gN+'개, 미스 '+mN+'개</small></h2><div class="tags">';
   Object.keys(MISS).filter(c=>c!=='멘탈').forEach(cat=>{x+='<h4>'+cat+'</h4>'+tagRow(cat);});
   x+='</div>';
-  const msc=+r.mentalScore||0;
-  x+='<h2>라운드 총평 <small>18홀을 마친 뒤 적어요</small></h2><div class="card">'+
+  const msc=+r.mentalScore||0,filled=r.holes.filter(h=>h.score).length;
+  const reviewOpen=ro||filled===18||S.reviewOpen||!!(r.memo||msc||ms.some(m=>m.startsWith('멘탈:')));
+  if(!reviewOpen){
+    x+='<h2 id="review">라운드 총평</h2><div class="card lockcard"><div class="lk">'+I.flag.replace('<svg','<svg width="22" height="22"')+'<div><b>18홀을 모두 입력하면 총평을 쓸 수 있어요</b><span>홀별 기록을 다 마친 뒤 라운드 전체를 돌아보며 적어요.</span></div></div>'+
+      '<div class="lprog"><i style="width:'+Math.round(filled/18*100)+'%"></i></div><div class="lrow"><span class="num">'+filled+' / 18홀</span><button class="link" data-act="openreview">9홀만 쳤다면 지금 쓰기</button></div></div>';
+  }else
+  x+='<h2 id="review">라운드 총평 <small>'+(filled===18?'18홀 입력 완료':'라운드를 마친 뒤 적어요')+'</small></h2><div class="card">'+
     '<div class="row"><div class="k">멘탈 점수</div><div class="pills">'+[1,2,3,4,5].map(v=>'<button class="pill'+(msc===v?' on':'')+'" data-act="mscore" data-v="'+v+'"'+(ro?' disabled':'')+'><span class="num">'+v+'</span></button>').join('')+'<span class="muted" style="font-size:12px;align-self:center">1 흔들림 ~ 5 최고</span></div></div>'+
-    '<div class="row tags"><div class="k">오늘 멘탈</div>'+tagRow('멘탈')+'</div>'+
+    '<div class="row tags"><div class="k">오늘 멘탈</div>'+tagRow('멘탈','흔들린 원인')+'</div>'+
     '<div class="row" style="margin:0"><div class="k">총평</div><textarea data-field="r-memo" placeholder="잘된 점, 아쉬운 점, 전반과 후반의 멘탈 흐름, 다음 라운드에서 바꿀 것" style="min-height:120px"'+(ro?' disabled':'')+'>'+esc(r.memo||'')+'</textarea></div></div>';
   if(false)Object.keys(MISS).forEach(cat=>{
     const gk=cat+':굿',gon=ms.includes(gk);
@@ -1315,7 +1346,7 @@ function openRound(id,ro){
   const o=JSON.parse(JSON.stringify(src));o.id=id;
   o.holes=Array.from({length:18},(_,i)=>Object.assign({par:4,score:0,putt:2,fw:null,note:''},(o.holes||[])[i]||{}));
   o.misses=o.misses||[];o.kind=KIND(o);o.match=o.match||{name:'',round:'1R',rank:'',field:'',tension:0};
-  S.round=o;S.roundRO=ro||o.playerId!==ME;S.roundSnap=JSON.stringify(o);S.hole=0;render();try{window.scrollTo(0,0);}catch(e){}
+  S.reviewOpen=false;S.round=o;S.roundRO=ro||o.playerId!==ME;S.roundSnap=JSON.stringify(o);S.hole=0;render();try{window.scrollTo(0,0);}catch(e){}
 }
 function closeRound(){S.round=null;S.roundSnap=null;S.roundRO=false;render();}
 async function newCode(){
@@ -1383,7 +1414,7 @@ document.addEventListener('click',async e=>{
       c[it.key]=!was;if(it.legacy)delete c[it.legacy];
       updateLog(ME,S.date,{checks:c},300);render();break;}
     case'submit':updateLog(ME,S.date,{submitted:true,submittedAt:Date.now()},0);toast('코치에게 제출했어요.');render();break;
-    case'newround':S.round=newRound(v);S.roundRO=false;S.roundSnap=JSON.stringify(S.round);S.hole=0;render();try{window.scrollTo(0,0);}catch(e){}break;
+    case'newround':S.reviewOpen=false;S.round=newRound(v);S.roundRO=false;S.roundSnap=JSON.stringify(S.round);S.hole=0;render();try{window.scrollTo(0,0);}catch(e){}break;
     case'openround':case'viewround':openRound(v,true);break;
     case'editfromlist':openRound(v,false);break;
     case'delfromlist':ask('이 라운드를 삭제할까요?','삭제',()=>{Store.del('rounds',v);toast('라운드를 삭제했어요.');render();},true);break;
@@ -1421,7 +1452,11 @@ document.addEventListener('click',async e=>{
       try{const j=await API.req('/pjoin',{method:'POST',body:{code:c}});S.drafts.pjoin='';await Store.load();toast((j.childName?j.childName+' ':'')+'자녀와 연결했어요.');setMode('parent');}catch(err){toast(err.message);}break;}
     case'unparent':ask('학부모 연결을 해제할까요?','해제',()=>{Store.del('parents',v);render();},true);break;
     case'par':{const h=r.holes[S.hole];const rel=h.score?h.score-h.par:null;h.par=+v;if(rel!=null)h.score=h.par+rel;if(h.par===3)h.fw=null;render();break;}
-    case'sc':{const h=r.holes[S.hole];h.score=h.par+(+v);render();break;}
+    case'sc':{const before=r.holes.filter(x=>x.score).length;const h=r.holes[S.hole];h.score=h.par+(+v);
+      const after=r.holes.filter(x=>x.score).length;render();
+      if(before<18&&after===18&&!r.memo){toast('18홀 입력 완료! 이제 라운드 총평을 적어 주세요.');setTimeout(()=>{const el=document.getElementById('review');if(el)window.scrollTo({top:el.getBoundingClientRect().top+window.scrollY-70,behavior:'smooth'});},400);}
+      break;}
+    case'openreview':S.reviewOpen=true;render();break;
     case'pt':r.holes[S.hole].putt=+v;render();break;
     case'fw':{const h=r.holes[S.hole];h.fw=h.fw===v?null:v;render();break;}
     case'miss':{r.misses=r.misses||[];const i=r.misses.indexOf(v);if(i>=0)r.misses.splice(i,1);else r.misses.push(v);render();break;}
