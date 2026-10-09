@@ -394,6 +394,10 @@ label.mitem{cursor:pointer;border:1.5px dashed var(--line);background:var(--card
 .lrow{display:flex;justify-content:space-between;align-items:center}
 .lrow .num{font-size:18px;font-weight:700}
 .lrow .link{font-size:13px;color:var(--muted);text-decoration:underline;text-underline-offset:3px}
+.holenav{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;margin:16px 0 4px}
+.holenav .btn{margin:0}
+.hn2{font-size:26px;font-weight:800;text-align:center;min-width:56px}
+.hn2 small{font-size:15px;color:var(--muted);font-weight:600}
 .fbo{font-size:12.5px;color:var(--muted);margin-top:8px}
 </style>
 </head>
@@ -433,8 +437,9 @@ const MISS={
 };
 const FIELD={id:'golf',label:'GOLF'};
 const GOOD='굿샷';
+const CATL=c=>c==='퍼팅'?'퍼트':c;
 const isGood=m=>m===GOOD||/:굿$/.test(m);
-const goodCat=m=>m===GOOD?'기타':m.split(':')[0];
+const goodCat=m=>m===GOOD?'기타':CATL(m.split(':')[0]);
 const COLS=['profiles','links','codes','drills','logs','rounds','feedback','reports','lessons','parents','pcodes','consents'];
 const TERMS_VERSION='2026-10-draft';
 const LESSON_TOPICS=['스윙','숏게임','퍼팅','코스 매니지먼트','멘탈'];
@@ -816,7 +821,6 @@ function vRoundEdit(){
     x+='<div class="row"><div class="k">퍼트</div><div class="pills">'+[0,1,2,3,4].map(v=>'<button class="pill'+(h.putt===v?' on':'')+'" data-act="pt" data-v="'+v+'"><span class="num">'+v+'</span></button>').join('')+'</div></div>';
     if(h.par>=4)x+='<div class="row"><div class="k">티샷</div><div class="pills">'+[['L','왼쪽 미스'],['hit','페어웨이'],['R','오른쪽 미스']].map(a=>'<button class="pill'+(h.fw===a[0]?' on':'')+'" data-act="fw" data-v="'+a[0]+'">'+a[1]+'</button>').join('')+'</div></div>';
     x+='<div class="row"><div class="k">세컨/서드 샷 (거리, 클럽, 결과)</div><input type="text" data-field="h-note" value="'+esc(h.note||'')+'" placeholder="예: 145m 7번 아이언, 그린 우측"></div>';
-    x+='<div style="display:flex;gap:8px"><button class="btn ghost" data-act="hole" data-v="'+Math.max(0,hi-1)+'"'+(hi===0?' disabled':'')+'>이전 홀</button><button class="btn" data-act="hole" data-v="'+Math.min(17,hi+1)+'"'+(hi===17?' disabled':'')+'>다음 홀</button></div>';
   }else{
     const notes=r.holes.map((hh,i)=>hh.note?'<div class="miss"><span>'+(i+1)+'번 홀</span><span class="muted" style="text-align:right">'+esc(hh.note)+'</span></div>':'').join('');
     if(notes)x+='<h2>샷 메모</h2><div class="card">'+notes+'</div>';
@@ -828,8 +832,9 @@ function vRoundEdit(){
       '<div class="smiss"><div class="mlab">'+(missLabel||'미스 원인')+(mc?' <b>'+mc+'</b>':'')+'<span>해당하는 것 모두</span></div>'+
       MISS[cat].map(m=>{const k=cat+':'+m,on=ms.includes(k);return '<button class="tag mtag'+(on?' on':'')+'" data-act="miss" data-v="'+esc(k)+'"'+(ro?' disabled':'')+' aria-pressed="'+on+'">'+m+'</button>';}).join('')+'</div></div>';};
   x+='<h2>샷 분석 <small>굿 '+gN+'개, 미스 '+mN+'개</small></h2><div class="tags">';
-  Object.keys(MISS).filter(c=>c!=='멘탈').forEach(cat=>{x+='<h4>'+cat+'</h4>'+tagRow(cat);});
+  Object.keys(MISS).filter(c=>c!=='멘탈').forEach(cat=>{x+='<h4>'+CATL(cat)+'</h4>'+tagRow(cat);});
   x+='</div>';
+  if(!ro)x+='<div class="holenav"><button class="btn ghost" data-act="holenav" data-v="'+Math.max(0,hi-1)+'"'+(hi===0?' disabled':'')+'>이전 홀</button><span class="hn2 num">'+(hi+1)+'<small>/18</small></span><button class="btn" data-act="holenav" data-v="'+Math.min(17,hi+1)+'"'+(hi===17?' disabled':'')+'>다음 홀</button></div>';
   const msc=+r.mentalScore||0,filled=r.holes.filter(h=>h.score).length;
   const reviewOpen=ro||filled===18||S.reviewOpen||!!(r.memo||msc||ms.some(m=>m.startsWith('멘탈:')));
   if(!reviewOpen){
@@ -943,7 +948,7 @@ function vReport(){
       const mx=Math.max(...C.goods.map(x=>x[1]));
       h+='<h2>굿 <small>총 '+C.goodN+'개</small></h2><div class="card" style="padding:6px 16px">'+C.goods.map(x=>'<div class="hbar"><span class="nm">'+esc(x[0])+'</span><span class="p num" style="color:var(--green)">'+x[1]+'</span><div class="track"><b style="width:'+Math.round(x[1]/mx*100)+'%"></b></div></div>').join('')+'</div>';
     }
-    if(C.misses.length)h+='<h2>자주 나온 미스 원인</h2><div class="card" style="padding:4px 16px">'+C.misses.slice(0,6).map(m=>'<div class="miss"><span>'+esc(m[0].replace(':',' / '))+'</span><b>'+m[1]+'회</b></div>').join('')+'</div>';
+    if(C.misses.length)h+='<h2>자주 나온 미스 원인</h2><div class="card" style="padding:4px 16px">'+C.misses.slice(0,6).map(m=>'<div class="miss"><span>'+esc(m[0].replace(':',' / ').replace(/^퍼팅/,'퍼트'))+'</span><b>'+m[1]+'회</b></div>').join('')+'</div>';
   }else h+='<div class="empty">이 기간에 기록한 라운드가 없어요.</div>';
   h+='<h2>'+(coach?'피드백':'받은 피드백')+' <small>'+C.fbs.length+'개</small></h2>';
   h+=C.fbs.length?C.fbs.map(f=>'<div class="fb" style="margin-top:8px"><div class="who2">'+md(f.date)+' '+f.type+', '+esc(f.coachId===ME?'내 피드백':cName(f.coachId)+'')+'</div><p>'+esc(f.text)+'</p></div>').join(''):'<div class="empty">이 기간의 피드백이 없어요.</div>';
@@ -989,7 +994,7 @@ async function demoSummary(C,coach){
   if(C.rp.avg&&C.rm.avg&&C.rm.avg-C.rp.avg>=3)bad.push('• 시합에서 연습보다 '+(C.rm.avg-C.rp.avg).toFixed(1)+'타 더 쳐서, 실전 긴장 관리가 과제예요.');
   if(C.rp.mental&&C.rm.mental&&C.rm.mental<C.rp.mental-0.4)bad.push('• 시합 멘탈 점수가 '+C.rm.mental+'점으로 연습 라운드('+C.rp.mental+'점)보다 낮아요.');
   if(R.has&&+R.putt>=33)bad.push('• 18홀 기준 평균 퍼트가 '+R.putt+'개로 많은 편이에요.');
-  if(C.misses.length)bad.push('• 가장 많이 나온 미스 원인은 '+C.misses[0][0].replace(':',' / ')+'('+C.misses[0][1]+'회)예요.');
+  if(C.misses.length)bad.push('• 가장 많이 나온 미스 원인은 '+C.misses[0][0].replace(':',' / ').replace(/^퍼팅/,'퍼트')+'('+C.misses[0][1]+'회)예요.');
   if(!bad.length)bad.push('• 크게 빠진 항목이 없어요. 지금 리듬을 유지해 봐요.');
   L.push(...bad.slice(0,3));
   L.push('','피드백에서 반복된 주제');
@@ -1423,6 +1428,7 @@ document.addEventListener('click',async e=>{
       if(S.roundRO||JSON.stringify(S.round)===S.roundSnap){closeRound();break;}
       ask('저장하지 않은 내용은 사라져요. 닫을까요?','닫기',closeRound,true);break;
     case'hole':S.hole=+v;render();break;
+    case'holenav':S.hole=+v;render();{const hh=document.querySelector('.hole-head');if(hh)window.scrollTo({top:hh.getBoundingClientRect().top+window.scrollY-70,behavior:'smooth'});}break;
     case'rk':S.rkind=v;render();break;
     case'rkind':r.kind=v;r.match=r.match||{name:'',round:'1R',rank:'',field:'',tension:0};render();break;
     case'mscore':r.mentalScore=+r.mentalScore===+v?0:+v;render();break;
