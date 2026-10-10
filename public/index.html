@@ -398,6 +398,25 @@ label.mitem{cursor:pointer;border:1.5px dashed var(--line);background:var(--card
 .holenav .btn{margin:0}
 .hn2{font-size:26px;font-weight:800;text-align:center;min-width:56px}
 .hn2 small{font-size:15px;color:var(--muted);font-weight:600}
+.ssum{padding:16px}
+.ssh{display:grid;grid-template-columns:repeat(3,1fr);text-align:center;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.ssh .num{display:block;font-size:40px;font-weight:800;line-height:1}
+.ssh small{font-size:12px;color:var(--muted)}
+.ssh .g,.ssr .g{color:var(--green)}.ssh .m,.ssr b.m{color:var(--under)}
+.ssrows{margin-top:12px}
+.ssr{display:grid;grid-template-columns:62px 1fr 64px;gap:10px;align-items:center;padding:6px 0}
+.ssr .nm{font-size:14px;font-weight:700}
+.ssbar{display:flex;height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.ssbar i{display:block;height:100%}
+.ssbar i.g{background:var(--green)}.ssbar i.m{background:var(--under)}
+.ssr .v{display:flex;justify-content:flex-end;gap:10px}
+.ssr .v b{font-size:19px;font-weight:700;min-width:16px;text-align:right}
+.sslg{display:flex;gap:14px;justify-content:flex-end;font-size:11.5px;color:var(--muted);margin-top:4px}
+.sslg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.sslg i.g{background:var(--green)}.sslg i.m{background:var(--under)}
+.sstop{margin-top:14px;padding-top:10px;border-top:1px solid var(--line)}
+.sstop .k{font-size:12.5px;font-weight:800;color:var(--muted);margin-bottom:2px}
+.ssnote{margin-top:12px;background:var(--paper);border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.7}
 .fbo{font-size:12.5px;color:var(--muted);margin-top:8px}
 </style>
 </head>
@@ -441,6 +460,31 @@ const CATL=c=>c==='퍼팅'?'퍼트':c;
 const isMental=m=>m.startsWith('멘탈:');
 // 샷 분석은 홀마다 저장(h.shots). 예전 라운드 단위 기록(r.misses 중 멘탈 외)도 통계에 함께 셉니다.
 const roundShots=r=>(r.holes||[]).reduce((a,h)=>a.concat(h.shots||[]),[]).concat((r.misses||[]).filter(m=>!isMental(m)));
+function shotSummary(r){
+  return shotSummaryOf(roundShots(r),{n:(r.holes||[]).filter(h=>(h.shots||[]).length).length,label:'기록한 홀'},false);
+}
+function shotSummaryOf(t,third,withMental){
+  const cats=Object.keys(MISS).filter(c=>c!=='멘탈').concat(withMental?['멘탈']:[]);
+  const rows=cats.map(c=>{const g=t.filter(m=>m===c+':굿').length,mi=t.filter(m=>m.startsWith(c+':')&&!isGood(m)).length;return{c,g,mi};}).filter(x=>x.c!=='멘탈'||x.g||x.mi);
+  const G=rows.reduce((a,x)=>a+x.g,0)+t.filter(m=>m===GOOD).length,M=rows.reduce((a,x)=>a+x.mi,0);
+  const holes=third.n;
+  if(!G&&!M)return '<div class="card ssum"><p class="muted" style="margin:0;font-size:13.5px">아직 기록한 샷 분석이 없어요. 홀마다 굿이나 미스 원인을 고르면 여기에 그날 요약이 나와요.</p></div>';
+  const mx=Math.max(1,...rows.map(x=>x.g+x.mi));
+  const cnt={};t.filter(m=>!isGood(m)).forEach(m=>{cnt[m]=(cnt[m]||0)+1;});
+  const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  const best=rows.filter(x=>x.g).sort((a,b)=>b.g-a.g||a.mi-b.mi)[0];
+  const worst=rows.filter(x=>x.mi).sort((a,b)=>b.mi-a.mi||a.g-b.g)[0];
+  let h='<div class="card ssum"><div class="ssh"><div><span class="num g">'+G+'</span><small>굿</small></div><div><span class="num m">'+M+'</span><small>미스</small></div><div><span class="num">'+holes+'</span><small>'+third.label+'</small></div></div>';
+  h+='<div class="ssrows">'+rows.map(x=>'<div class="ssr"><span class="nm">'+CATL(x.c)+'</span><div class="ssbar"><i class="g" style="width:'+(x.g/mx*100)+'%"></i><i class="m" style="width:'+(x.mi/mx*100)+'%"></i></div><span class="v"><b class="num g">'+x.g+'</b><b class="num m">'+x.mi+'</b></span></div>').join('')+'</div>';
+  h+='<div class="sslg"><span><i class="g"></i>굿</span><span><i class="m"></i>미스</span></div>';
+  if(top.length)h+='<div class="sstop"><div class="k">가장 많이 나온 미스 원인</div>'+top.map((e,i)=>'<div class="miss"><span>'+(i+1)+'. '+esc(e[0].replace(':',' / ').replace(/^퍼팅/,'퍼트'))+'</span><b>'+e[1]+'회</b></div>').join('')+'</div>';
+  const notes=[];
+  const jo=w=>{const ch=w.charCodeAt(w.length-1)-0xAC00;return ch>=0&&ch%28?'이':'가';};
+  if(best)notes.push('<b style="color:var(--green)">'+CATL(best.c)+'</b>'+jo(CATL(best.c))+' 가장 잘 됐어요 (굿 '+best.g+')');
+  if(worst)notes.push('<b style="color:var(--under)">'+CATL(worst.c)+'</b>에서 미스가 가장 많았어요 ('+worst.mi+'회)');
+  if(notes.length)h+='<div class="ssnote">'+notes.join('<br>')+'</div>';
+  return h+'</div>';
+}
 const roundTags=r=>roundShots(r).concat((r.misses||[]).filter(isMental));
 const isGood=m=>m===GOOD||/:굿$/.test(m);
 const goodCat=m=>m===GOOD?'기타':CATL(m.split(':')[0]);
@@ -846,11 +890,14 @@ function vRoundEdit(){
       const g=t.filter(isGood).map(goodCat),m=t.filter(z=>!isGood(z)).map(z=>z.replace(':',' / ').replace(/^퍼팅/,'퍼트'));
       return '<div class="miss"><span>'+(i+1)+'번 홀</span><span style="text-align:right">'+(g.length?'<b style="color:var(--green);font-family:inherit;font-size:13px">굿 '+esc(g.join(', '))+'</b>':'')+(g.length&&m.length?'<br>':'')+(m.length?'<span style="color:var(--under);font-size:13px">'+esc(m.join(', '))+'</span>':'')+'</span></div>';}).join('');
     const all=roundShots(r);
-    x+='<h2>샷 분석 <small>굿 '+all.filter(isGood).length+'개, 미스 '+all.filter(z=>!isGood(z)).length+'개</small></h2>'+(lines||legacy.length?'<div class="card" style="padding:4px 16px">'+lines+(legacy.length?'<div class="miss"><span>라운드 전체</span><span class="muted" style="text-align:right;font-size:13px">'+esc(legacy.map(m=>isGood(m)?goodCat(m)+' 굿':m.replace(':',' / ').replace(/^퍼팅/,'퍼트')).join(', '))+'</span></div>':'')+'</div>':'<div class="empty">기록한 샷 분석이 없어요.</div>');
+    x+='<h2>샷 분석 요약 <small>18홀 합계</small></h2>'+shotSummary(r);
+    if(lines||legacy.length)x+='<h2>홀별 샷 분석</h2>';
+    x+=(lines||legacy.length?'<div class="card" style="padding:4px 16px">'+lines+(legacy.length?'<div class="miss"><span>라운드 전체</span><span class="muted" style="text-align:right;font-size:13px">'+esc(legacy.map(m=>isGood(m)?goodCat(m)+' 굿':m.replace(':',' / ').replace(/^퍼팅/,'퍼트')).join(', '))+'</span></div>':'')+'</div>':'');
   }
   if(!ro)x+='<div class="holenav"><button class="btn ghost" data-act="holenav" data-v="'+Math.max(0,hi-1)+'"'+(hi===0?' disabled':'')+'>이전 홀</button><span class="hn2 num">'+(hi+1)+'<small>/18</small></span><button class="btn" data-act="holenav" data-v="'+Math.min(17,hi+1)+'"'+(hi===17?' disabled':'')+'>다음 홀</button></div>';
   const msc=+r.mentalScore||0,filled=r.holes.filter(h=>h.score).length;
   const reviewOpen=ro||filled===18||S.reviewOpen||!!(r.memo||msc||ms.some(isMental));
+  if(reviewOpen&&!ro)x+='<h2 id="sumsec">오늘 샷 분석 요약 <small>18홀 합계</small></h2>'+shotSummary(r);
   if(!reviewOpen){
     x+='<h2 id="review">라운드 총평</h2><div class="card lockcard"><div class="lk">'+I.flag.replace('<svg','<svg width="22" height="22"')+'<div><b>18홀을 모두 입력하면 총평을 쓸 수 있어요</b><span>홀별 기록을 다 마친 뒤 라운드 전체를 돌아보며 적어요.</span></div></div>'+
       '<div class="lprog"><i style="width:'+Math.round(filled/18*100)+'%"></i></div><div class="lrow"><span class="num">'+filled+' / 18홀</span><button class="link" data-act="openreview">9홀만 쳤다면 지금 쓰기</button></div></div>';
@@ -958,11 +1005,9 @@ function vReport(){
       const X=C.rp.has?C.rp:C.rm;
       h+='<div class="kpis" style="margin-top:0"><div class="kpi"><div class="v num">'+(X.avg||'–')+'</div><div class="l">평균 스코어 (18홀, '+(C.rp.has?'연습':'시합')+')</div></div><div class="kpi"><div class="v num">'+X.putt+'</div><div class="l">18홀 기준 평균 퍼트</div></div><div class="kpi"><div class="v num">'+X.fw+'<small>%</small></div><div class="l">페어웨이 안착률</div></div><div class="kpi"><div class="v num">'+X.gir+'<small>%</small></div><div class="l">그린 적중률</div></div>'+(X.mental?'<div class="kpi"><div class="v num">'+X.mental+'<small>/5</small></div><div class="l">평균 멘탈 점수</div></div>':'')+'</div>';
     }
-    if(C.goodN){
-      const mx=Math.max(...C.goods.map(x=>x[1]));
-      h+='<h2>굿 <small>총 '+C.goodN+'개</small></h2><div class="card" style="padding:6px 16px">'+C.goods.map(x=>'<div class="hbar"><span class="nm">'+esc(x[0])+'</span><span class="p num" style="color:var(--green)">'+x[1]+'</span><div class="track"><b style="width:'+Math.round(x[1]/mx*100)+'%"></b></div></div>').join('')+'</div>';
-    }
-    if(C.misses.length)h+='<h2>자주 나온 미스 원인</h2><div class="card" style="padding:4px 16px">'+C.misses.slice(0,6).map(m=>'<div class="miss"><span>'+esc(m[0].replace(':',' / ').replace(/^퍼팅/,'퍼트'))+'</span><b>'+m[1]+'회</b></div>').join('')+'</div>';
+    const tags=C.rounds.reduce((a,r)=>a.concat(roundTags(r)),[]);
+    const recR=C.rounds.filter(r=>roundTags(r).length).length;
+    h+='<h2>샷 분석 <small>'+(S.period==='week'?'이번 주':'이번 달')+' 라운드 '+C.rounds.length+'회 합계</small></h2>'+shotSummaryOf(tags,{n:recR,label:'분석한 라운드'},true);
   }else h+='<div class="empty">이 기간에 기록한 라운드가 없어요.</div>';
   h+='<h2>'+(coach?'피드백':'받은 피드백')+' <small>'+C.fbs.length+'개</small></h2>';
   h+=C.fbs.length?C.fbs.map(f=>'<div class="fb" style="margin-top:8px"><div class="who2">'+md(f.date)+' '+f.type+', '+esc(f.coachId===ME?'내 피드백':cName(f.coachId)+'')+'</div><p>'+esc(f.text)+'</p></div>').join(''):'<div class="empty">이 기간의 피드백이 없어요.</div>';
@@ -1474,7 +1519,7 @@ document.addEventListener('click',async e=>{
     case'par':{const h=r.holes[S.hole];const rel=h.score?h.score-h.par:null;h.par=+v;if(rel!=null)h.score=h.par+rel;if(h.par===3)h.fw=null;render();break;}
     case'sc':{const before=r.holes.filter(x=>x.score).length;const h=r.holes[S.hole];h.score=h.par+(+v);
       const after=r.holes.filter(x=>x.score).length;render();
-      if(before<18&&after===18&&!r.memo){toast('18홀 입력 완료! 이제 라운드 총평을 적어 주세요.');setTimeout(()=>{const el=document.getElementById('review');if(el)window.scrollTo({top:el.getBoundingClientRect().top+window.scrollY-70,behavior:'smooth'});},400);}
+      if(before<18&&after===18&&!r.memo){toast('18홀 입력 완료! 오늘 샷 분석을 보고 총평을 적어 주세요.');setTimeout(()=>{const el=document.getElementById('sumsec')||document.getElementById('review');if(el)window.scrollTo({top:el.getBoundingClientRect().top+window.scrollY-70,behavior:'smooth'});},400);}
       break;}
     case'openreview':S.reviewOpen=true;render();break;
     case'pt':r.holes[S.hole].putt=+v;render();break;
