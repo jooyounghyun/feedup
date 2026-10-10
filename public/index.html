@@ -438,6 +438,10 @@ const MISS={
 const FIELD={id:'golf',label:'GOLF'};
 const GOOD='굿샷';
 const CATL=c=>c==='퍼팅'?'퍼트':c;
+const isMental=m=>m.startsWith('멘탈:');
+// 샷 분석은 홀마다 저장(h.shots). 예전 라운드 단위 기록(r.misses 중 멘탈 외)도 통계에 함께 셉니다.
+const roundShots=r=>(r.holes||[]).reduce((a,h)=>a.concat(h.shots||[]),[]).concat((r.misses||[]).filter(m=>!isMental(m)));
+const roundTags=r=>roundShots(r).concat((r.misses||[]).filter(isMental));
 const isGood=m=>m===GOOD||/:굿$/.test(m);
 const goodCat=m=>m===GOOD?'기타':CATL(m.split(':')[0]);
 const COLS=['profiles','links','codes','drills','logs','rounds','feedback','reports','lessons','parents','pcodes','consents'];
@@ -616,7 +620,7 @@ function fbHtml(list){
 }
 
 /* ---------- rounds ---------- */
-function newRound(kind){return{id:'r'+uid(),playerId:ME,kind:kind==='match'?'match':'practice',match:{name:'',round:'1R',rank:'',field:'',tension:0},date:today(),course:'',holes:Array.from({length:18},()=>({par:4,score:0,putt:2,fw:null,note:''})),misses:[],memo:'',createdAt:Date.now()};}
+function newRound(kind){return{id:'r'+uid(),playerId:ME,kind:kind==='match'?'match':'practice',match:{name:'',round:'1R',rank:'',field:'',tension:0},date:today(),course:'',holes:Array.from({length:18},()=>({par:4,score:0,putt:2,fw:null,note:'',shots:[]})),misses:[],memo:'',createdAt:Date.now()};}
 function rs(r){
   const o={n:0,tot:0,par:0,vs:0,putt:0,fw:0,fwN:0,gir:0,rec:0,recN:0,out:0,inn:0};
   (r.holes||[]).forEach((h,i)=>{
@@ -825,18 +829,28 @@ function vRoundEdit(){
     const notes=r.holes.map((hh,i)=>hh.note?'<div class="miss"><span>'+(i+1)+'번 홀</span><span class="muted" style="text-align:right">'+esc(hh.note)+'</span></div>':'').join('');
     if(notes)x+='<h2>샷 메모</h2><div class="card">'+notes+'</div>';
   }
-  const ms=r.misses||[],shotMs=ms.filter(m=>!m.startsWith('멘탈:')),gN=shotMs.filter(isGood).length,mN=shotMs.length-gN;
-  const tagRow=(cat,missLabel)=>{const gk=cat+':굿',gon=ms.includes(gk),mc=MISS[cat].filter(m=>ms.includes(cat+':'+m)).length;
+  const ms=r.misses||[],hs=(h&&h.shots)||[],gN=hs.filter(isGood).length,mN=hs.length-gN;
+  const legacy=ms.filter(m=>!isMental(m));
+  const tagRow=(cat,missLabel)=>{const src=cat==='멘탈'?ms:hs,gk=cat+':굿',gon=src.includes(gk),mc=MISS[cat].filter(m=>src.includes(cat+':'+m)).length;
     return '<div class="sgrp">'+
       '<div class="sgood"><button class="tag good'+(gon?' on':'')+'" data-act="miss" data-v="'+esc(gk)+'"'+(ro?' disabled':'')+' aria-pressed="'+gon+'">'+I.check.replace('<svg','<svg width="14" height="14"')+'굿</button><span class="shint">'+(cat==='멘탈'?(gon?'멘탈 굿으로 기록했어요':'흔들림 없이 잘 버텼다면 굿'):(gon?'잘 된 샷으로 기록했어요':'잘 맞았다면 굿'))+'</span></div>'+
       '<div class="smiss"><div class="mlab">'+(missLabel||'미스 원인')+(mc?' <b>'+mc+'</b>':'')+'<span>해당하는 것 모두</span></div>'+
-      MISS[cat].map(m=>{const k=cat+':'+m,on=ms.includes(k);return '<button class="tag mtag'+(on?' on':'')+'" data-act="miss" data-v="'+esc(k)+'"'+(ro?' disabled':'')+' aria-pressed="'+on+'">'+m+'</button>';}).join('')+'</div></div>';};
-  x+='<h2>샷 분석 <small>굿 '+gN+'개, 미스 '+mN+'개</small></h2><div class="tags">';
-  Object.keys(MISS).filter(c=>c!=='멘탈').forEach(cat=>{x+='<h4>'+CATL(cat)+'</h4>'+tagRow(cat);});
-  x+='</div>';
+      MISS[cat].map(m=>{const k=cat+':'+m,on=src.includes(k);return '<button class="tag mtag'+(on?' on':'')+'" data-act="miss" data-v="'+esc(k)+'"'+(ro?' disabled':'')+' aria-pressed="'+on+'">'+m+'</button>';}).join('')+'</div></div>';};
+  if(!ro){
+    x+='<h2>'+(hi+1)+'번 홀 샷 분석 <small>굿 '+gN+'개, 미스 '+mN+'개</small></h2><div class="tags">';
+    Object.keys(MISS).filter(c=>c!=='멘탈').forEach(cat=>{x+='<h4>'+CATL(cat)+'</h4>'+tagRow(cat);});
+    x+='</div>';
+    if(legacy.length)x+='<p class="muted" style="font-size:12.5px;margin:8px 2px 0">이전 방식으로 라운드 전체에 기록한 샷 분석: '+esc(legacy.map(m=>isGood(m)?goodCat(m)+' 굿':m.replace(':',' / ').replace(/^퍼팅/,'퍼트')).join(', '))+'</p>';
+  }else{
+    const lines=r.holes.map((hh,i)=>{const t=hh.shots||[];if(!t.length)return '';
+      const g=t.filter(isGood).map(goodCat),m=t.filter(z=>!isGood(z)).map(z=>z.replace(':',' / ').replace(/^퍼팅/,'퍼트'));
+      return '<div class="miss"><span>'+(i+1)+'번 홀</span><span style="text-align:right">'+(g.length?'<b style="color:var(--green);font-family:inherit;font-size:13px">굿 '+esc(g.join(', '))+'</b>':'')+(g.length&&m.length?'<br>':'')+(m.length?'<span style="color:var(--under);font-size:13px">'+esc(m.join(', '))+'</span>':'')+'</span></div>';}).join('');
+    const all=roundShots(r);
+    x+='<h2>샷 분석 <small>굿 '+all.filter(isGood).length+'개, 미스 '+all.filter(z=>!isGood(z)).length+'개</small></h2>'+(lines||legacy.length?'<div class="card" style="padding:4px 16px">'+lines+(legacy.length?'<div class="miss"><span>라운드 전체</span><span class="muted" style="text-align:right;font-size:13px">'+esc(legacy.map(m=>isGood(m)?goodCat(m)+' 굿':m.replace(':',' / ').replace(/^퍼팅/,'퍼트')).join(', '))+'</span></div>':'')+'</div>':'<div class="empty">기록한 샷 분석이 없어요.</div>');
+  }
   if(!ro)x+='<div class="holenav"><button class="btn ghost" data-act="holenav" data-v="'+Math.max(0,hi-1)+'"'+(hi===0?' disabled':'')+'>이전 홀</button><span class="hn2 num">'+(hi+1)+'<small>/18</small></span><button class="btn" data-act="holenav" data-v="'+Math.min(17,hi+1)+'"'+(hi===17?' disabled':'')+'>다음 홀</button></div>';
   const msc=+r.mentalScore||0,filled=r.holes.filter(h=>h.score).length;
-  const reviewOpen=ro||filled===18||S.reviewOpen||!!(r.memo||msc||ms.some(m=>m.startsWith('멘탈:')));
+  const reviewOpen=ro||filled===18||S.reviewOpen||!!(r.memo||msc||ms.some(isMental));
   if(!reviewOpen){
     x+='<h2 id="review">라운드 총평</h2><div class="card lockcard"><div class="lk">'+I.flag.replace('<svg','<svg width="22" height="22"')+'<div><b>18홀을 모두 입력하면 총평을 쓸 수 있어요</b><span>홀별 기록을 다 마친 뒤 라운드 전체를 돌아보며 적어요.</span></div></div>'+
       '<div class="lprog"><i style="width:'+Math.round(filled/18*100)+'%"></i></div><div class="lrow"><span class="num">'+filled+' / 18홀</span><button class="link" data-act="openreview">9홀만 쳤다면 지금 쓰기</button></div></div>';
@@ -883,7 +897,7 @@ function compute(p){
   const tc={};lessons.forEach(l=>(l.topics||[]).forEach(x=>{tc[x]=(tc[x]||0)+1;}));
   const rounds=allRounds().filter(r=>r.playerId===p&&r.date>=R.s&&r.date<=R.e).sort((a,b)=>a.date.localeCompare(b.date));
   const rnd=rstat(rounds),rp=rstat(rounds.filter(r=>KIND(r)!=='match')),rm=rstat(rounds.filter(r=>KIND(r)==='match'));
-  const mc={},gc={};let goodN=0;rounds.forEach(r=>(r.misses||[]).forEach(m=>{if(isGood(m)){goodN++;const c=goodCat(m);gc[c]=(gc[c]||0)+1;return;}mc[m]=(mc[m]||0)+1;}));
+  const mc={},gc={};let goodN=0;rounds.forEach(r=>roundTags(r).forEach(m=>{if(isGood(m)){goodN++;const c=goodCat(m);gc[c]=(gc[c]||0)+1;return;}mc[m]=(mc[m]||0)+1;}));
   const goods=Object.keys(MISS).concat(['기타']).filter(c=>gc[c]).map(c=>[c,gc[c]]);
   const misses=Object.entries(mc).sort((a,b)=>b[1]-a[1]);
   const fbs=[];
@@ -1021,7 +1035,7 @@ async function runAI(){
     항목별체크일수:C.perDrill.map(x=>'['+x.group+'] '+x.name+': '+x.days+'/'+C.pastN),
     일별:C.daily.filter(x=>!x.fut&&(x.done||x.L.memo)).map(x=>({날짜:x.d,완료:x.done+'/'+C.items.length,빠진항목:C.items.filter(i=>!isChk(x.L,i)).map(i=>i.name),메모:x.L.memo||''})),
     레슨:C.lessons.map(l=>({날짜:l.date,코치:lessonCoach(l),주제:l.topics||[],내용:l.content,숙제:hwLines(l),사진영상수:(l.media||[]).length,코치피드백:fbsFor('lesson',l.id,l.playerId).map(f=>f.text)})),숙제수행:C.hw.done+'/'+C.hw.tot,
-    라운드:C.rounds.map(r=>{const s=rs(r);return{종류:KIND(r)==='match'?'시합':'연습',대회:KIND(r)==='match'?r.match:null,날짜:r.date,코스:r.course,홀수:s.n,스코어:s.tot,파대비:vsPar(s.vs),퍼트:s.putt,페어웨이:s.fw+'/'+s.fwN,GIR:s.gir+'/'+s.n,리커버리:s.rec+'/'+s.recN,멘탈점수:r.mentalScore||null,총평:r.memo||'',굿:(r.misses||[]).filter(isGood).map(goodCat),미스원인:(r.misses||[]).filter(m=>!isGood(m)),메모:r.memo||'',샷메모:r.holes.map((h,i)=>h.note?(i+1)+'번홀 '+h.note:'').filter(Boolean)};}),
+    라운드:C.rounds.map(r=>{const s=rs(r);return{종류:KIND(r)==='match'?'시합':'연습',대회:KIND(r)==='match'?r.match:null,날짜:r.date,코스:r.course,홀수:s.n,스코어:s.tot,파대비:vsPar(s.vs),퍼트:s.putt,페어웨이:s.fw+'/'+s.fwN,GIR:s.gir+'/'+s.n,리커버리:s.rec+'/'+s.recN,멘탈점수:r.mentalScore||null,총평:r.memo||'',굿:roundTags(r).filter(isGood).map(goodCat),미스원인:roundTags(r).filter(m=>!isGood(m)),홀별샷분석:r.holes.map((h,i)=>(h.shots||[]).length?(i+1)+'번홀 '+h.shots.join(', '):'').filter(Boolean),메모:r.memo||'',샷메모:r.holes.map((h,i)=>h.note?(i+1)+'번홀 '+h.note:'').filter(Boolean)};}),
     라운드평균:{연습:C.rp,시합:C.rm},굿빈도:C.goods,미스원인빈도:C.misses,
     피드백:C.fbs.map(f=>({날짜:f.date,종류:f.type,작성:f.coachId===ME?'나':cName(f.coachId)+'',내용:f.text}))
   };
@@ -1078,8 +1092,8 @@ function vInbox(){
       const s=rs(it.o);
       b='<div class="body">'+kindBadge(it.o)+' <b>'+esc(rTitle(it.o))+'</b> <b class="num'+(s.vs<0?' under':'')+'" style="font-size:22px">'+(s.tot||'–')+' '+(s.n?vsPar(s.vs):'')+'</b><div class="muted" style="font-size:13px">FW '+s.fw+'/'+s.fwN+', GIR '+s.gir+'/'+s.n+', 퍼트 '+s.putt+(it.o.mentalScore?', 멘탈 '+it.o.mentalScore+'/5':'')+'</div>'+
         '<div class="mini">'+it.o.holes.slice(0,9).map(shape).join('')+'</div><div class="mini">'+it.o.holes.slice(9).map(shape).join('')+'</div>'+
-        ((it.o.misses||[]).some(isGood)?'<div style="font-size:13px;margin-top:8px;color:var(--green);font-weight:700">굿: '+esc(it.o.misses.filter(isGood).map(goodCat).join(', '))+'</div>':'')+
-        ((it.o.misses||[]).filter(m=>!isGood(m)).length?'<div class="muted" style="font-size:13px;margin-top:8px">미스 원인: '+esc(it.o.misses.filter(m=>!isGood(m)).map(m=>m.split(':')[1]).join(', '))+'</div>':'')+
+        (roundTags(it.o).some(isGood)?'<div style="font-size:13px;margin-top:8px;color:var(--green);font-weight:700">굿: '+esc(roundTags(it.o).filter(isGood).map(goodCat).join(', '))+'</div>':'')+
+        (roundTags(it.o).filter(m=>!isGood(m)).length?'<div class="muted" style="font-size:13px;margin-top:8px">미스 원인: '+esc(roundTags(it.o).filter(m=>!isGood(m)).map(m=>m.split(':')[1]).join(', '))+'</div>':'')+
         (it.o.memo?'<div class="memo">'+esc(it.o.memo)+'</div>':'')+'</div>';
     }
     const others=fbsFor(it.kind,it.id,it.p).filter(f=>f.coachId!==ME);
@@ -1349,7 +1363,7 @@ function ask(msg,ok,fn,danger){S.dlg={msg,ok,fn,danger};render();}
 function openRound(id,ro){
   const src=Store.data.rounds[id];if(!src){toast('라운드를 찾지 못했어요.');return;}
   const o=JSON.parse(JSON.stringify(src));o.id=id;
-  o.holes=Array.from({length:18},(_,i)=>Object.assign({par:4,score:0,putt:2,fw:null,note:''},(o.holes||[])[i]||{}));
+  o.holes=Array.from({length:18},(_,i)=>Object.assign({par:4,score:0,putt:2,fw:null,note:'',shots:[]},(o.holes||[])[i]||{}));
   o.misses=o.misses||[];o.kind=KIND(o);o.match=o.match||{name:'',round:'1R',rank:'',field:'',tension:0};
   S.reviewOpen=false;S.round=o;S.roundRO=ro||o.playerId!==ME;S.roundSnap=JSON.stringify(o);S.hole=0;render();try{window.scrollTo(0,0);}catch(e){}
 }
@@ -1465,7 +1479,7 @@ document.addEventListener('click',async e=>{
     case'openreview':S.reviewOpen=true;render();break;
     case'pt':r.holes[S.hole].putt=+v;render();break;
     case'fw':{const h=r.holes[S.hole];h.fw=h.fw===v?null:v;render();break;}
-    case'miss':{r.misses=r.misses||[];const i=r.misses.indexOf(v);if(i>=0)r.misses.splice(i,1);else r.misses.push(v);render();break;}
+    case'miss':{const L=isMental(v)?(r.misses=r.misses||[]):(r.holes[S.hole].shots=r.holes[S.hole].shots||[]);const i=L.indexOf(v);if(i>=0)L.splice(i,1);else L.push(v);render();break;}
     case'saveround':{
       const o=JSON.parse(JSON.stringify(r));const id=o.id;delete o.id;o.updatedAt=Date.now();
       const existed=!!Store.data.rounds[id];Store.set('rounds',id,o);closeRound();

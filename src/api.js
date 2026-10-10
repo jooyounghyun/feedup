@@ -234,6 +234,7 @@ async function write(env, ME, b) {
         putt: Math.max(0, Math.min(9, h.putt == null ? 2 : +h.putt)),
         fw: ['hit', 'L', 'R'].includes(h.fw) ? h.fw : null,
         note: str(h.note, 200),
+        shots: (Array.isArray(h.shots) ? h.shots : []).slice(0, 30).map((m) => str(m, 40)).filter(Boolean),
       }));
       await putDoc(env, col, id, {
         playerId: ME, date: isDate(data.date) ? data.date : new Date().toISOString().slice(0, 10),
