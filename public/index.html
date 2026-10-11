@@ -417,6 +417,22 @@ label.mitem{cursor:pointer;border:1.5px dashed var(--line);background:var(--card
 .sstop{margin-top:14px;padding-top:10px;border-top:1px solid var(--line)}
 .sstop .k{font-size:12.5px;font-weight:800;color:var(--muted);margin-bottom:2px}
 .ssnote{margin-top:12px;background:var(--paper);border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.7}
+.spq{font-size:20px;font-weight:900;letter-spacing:-.03em;margin:-6px 0 4px}
+.spopt{display:block;width:100%;text-align:left;border:1.5px solid #E4E7EC;border-radius:16px;padding:16px 46px 16px 16px;margin-bottom:12px;position:relative;background:#fff;color:#0B0B0C;transition:border-color .15s}
+.spopt:hover,.spopt:focus-visible{border-color:#0B0B0C}
+.spopt .t{display:block;font-size:18px;font-weight:900;letter-spacing:-.02em}
+.spopt .d{display:block;font-size:13px;color:#8E8E93;margin-top:4px;line-height:1.5}
+.spopt .tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}
+.spopt .tags i{font-style:normal;font-size:11.5px;font-weight:700;background:#F2F4F7;border-radius:5px;padding:2px 7px;color:#0B0B0C}
+.spopt .ar{position:absolute;right:14px;top:50%;transform:translateY(-50%);color:#8E8E93}
+.chipk.sp{background:#1F5EFF}
+.field.sp{background:var(--green)}
+.drill.ph .box{border-style:dashed}
+.drill.ph .nm{color:var(--muted);font-weight:600}
+.drill.ph .ds{color:var(--green)}
+.phcta{margin-top:10px;border:1.5px dashed var(--line);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.phcta .link{color:var(--green);font-weight:700;font-size:13px;padding:0;white-space:nowrap}
+.hwcard{border-left:4px solid var(--green)}
 .fbo{font-size:12.5px;color:var(--muted);margin-top:8px}
 </style>
 </head>
@@ -488,7 +504,11 @@ function shotSummaryOf(t,third,withMental){
 const roundTags=r=>roundShots(r).concat((r.misses||[]).filter(isMental));
 const isGood=m=>m===GOOD||/:굿$/.test(m);
 const goodCat=m=>m===GOOD?'기타':CATL(m.split(':')[0]);
-const COLS=['profiles','links','codes','drills','logs','rounds','feedback','reports','lessons','parents','pcodes','consents'];
+const COLS=['profiles','links','codes','drills','logs','rounds','feedback','reports','lessons','parents','pcodes','consents','homework'];
+const SOLO_DRILLS=[{id:'s1',name:'',target:''},{id:'s2',name:'',target:''},{id:'s3',name:'',target:''}];
+const SPACES={academy:{label:'아카데미',chip:'ACADEMY',desc:'코치·선수·학부모가 함께 쓰는 팀 관리',tags:['연습 체크','레슨','라운드','시합']},solo:{label:'개인 · 개인 레슨',chip:'개인',desc:'혼자 연습하거나, 개인 강사에게 1:1로 레슨받는 선수',tags:['연습 체크','레슨','라운드']}};
+const SOLO=()=>S.space==='solo';
+const inSpace=o=>((o&&o.space)||'academy')===(S.space||'academy');
 const TERMS_VERSION='2026-10-draft';
 const LESSON_TOPICS=['스윙','숏게임','퍼팅','코스 매니지먼트','멘탈'];
 const WD=['일','월','화','수','목','금','토'];
@@ -588,6 +608,7 @@ const S={
   mode:lsGet('sn_mode','player'),tab:null,date:today(),period:'week',anchor:today(),
   reportPlayer:null,inboxFilter:'pending',inboxPlayer:'all',
   round:null,roundRO:false,roundSnap:null,hole:0,
+  space:lsGet('fu_space',null),hwEdit:null,hwSnap:null,
   lesson:null,lessonSnap:null,mediaMsg:'',upMsg:'',uploading:0,newKeys:[],viewer:null,rkind:'all',lessonPlayer:'all',child:null,
   loading:true,drafts:{},dd:{},dlg:null,defaultName:'',ag:{},termsView:null,withdraw:false,authMode:'login',authBusy:false,authErr:'',
   ai:{busy:false,key:null,text:''}
@@ -602,14 +623,16 @@ const coachesOf=p=>links().filter(l=>l.playerId===p&&l.status==='active').map(l=
 const playersOf=c=>links().filter(l=>l.coachId===c&&l.status==='active').map(l=>l.playerId).filter(p=>prof(p));
 const requestsFor=c=>links().filter(l=>l.coachId===c&&l.status==='pending'&&prof(l.playerId));
 const coachEnabled=()=>!!(prof(ME)&&prof(ME).coach)||links().some(l=>l.coachId===ME);
-const ownDrills=p=>{const d=Store.data.drills[p];return d?d.list:DEFAULT_DRILLS;};
+const ownDrills=p=>{const d=Store.data.drills[(SOLO()?'s_':'')+p];return d?d.list:(SOLO()?SOLO_DRILLS:DEFAULT_DRILLS);};
+const unnamedOwn=p=>ownDrills(p).filter(d=>!(d.name||'').trim()).length;
 const coachDrills=c=>{const d=Store.data.drills['c_'+c];return d?d.list:[];};
 const parentLinks=()=>Object.entries(Store.data.parents||{}).map(([id,l])=>Object.assign({},l,{id}));
 const childrenOf=u=>parentLinks().filter(l=>l.parentId===u).map(l=>l.playerId).filter(p=>prof(p));
 const parentsOf=p=>parentLinks().filter(l=>l.playerId===p&&prof(l.parentId));
 const parentEnabled=()=>childrenOf(ME).length>0;
 const isParentOf=p=>childrenOf(ME).includes(p);
-const allLessons=()=>Object.entries(Store.data.lessons||{}).map(([id,l])=>Object.assign({},l,{id}));
+const allLessons=()=>Object.entries(Store.data.lessons||{}).map(([id,l])=>Object.assign({},l,{id})).filter(inSpace);
+const allHw=()=>Object.entries(Store.data.homework||{}).map(([id,l])=>Object.assign({},l,{id,isHw:true})).filter(inSpace);
 const lessonsOf=p=>allLessons().filter(l=>l.playerId===p).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
 const lessonCoach=l=>l.coachId?(l.coachId===ME?'내 레슨':cName(l.coachId)):(l.coachName||'개인 레슨');
 const hwLines=l=>String(l.homework||'').split('\n').map(x=>x.trim()).filter(Boolean).slice(0,10);
@@ -617,7 +640,7 @@ function hwGroups(p,d){
   // 그날 기준 가장 최근 레슨의 숙제 하나만 보여줘요. 새 숙제가 생기면 이전 숙제는 사라지고, 레슨일부터 1주일(7일) 동안만 표시해요.
   if(!d)return[];
   let best=null;
-  allLessons().forEach(l=>{
+  allLessons().concat(allHw()).forEach(l=>{
     if(l.playerId!==p||!hwLines(l).length||l.date>d)return;
     if(!best||best.date<l.date||(best.date===l.date&&(best.createdAt||0)<(l.createdAt||0)))best=l;
   });
@@ -625,12 +648,12 @@ function hwGroups(p,d){
   return [{owner:'hw',coachId:best.coachId,lesson:best,items:hwLines(best).map((x,i)=>({id:'hw'+i,name:x,target:'',key:'hw:'+best.id+':'+i,hw:true}))}];
 }
 function groups(p,d){
-  const g=[{owner:'me',coachId:null,items:ownDrills(p).map(d=>Object.assign({},d,{key:'me:'+d.id,legacy:d.id}))}];
+  const g=[{owner:'me',coachId:null,items:ownDrills(p).filter(d=>(d.name||'').trim()).map(d=>Object.assign({},d,{key:(SOLO()?'sme:':'me:')+d.id,legacy:SOLO()?null:d.id}))}];
   coachesOf(p).forEach(c=>{const it=coachDrills(c);if(it.length)g.push({owner:c,coachId:c,items:it.map(d=>Object.assign({},d,{key:c+':'+d.id}))});});
   return g.concat(hwGroups(p,d));
 }
 function gLabel(g,p){
-  if(g.owner==='hw')return '레슨 숙제 ('+lessonCoach(g.lesson)+', '+md(g.lesson.date)+')';
+  if(g.owner==='hw')return (g.lesson.isHw?'코치 숙제 (':'레슨 숙제 (')+lessonCoach(g.lesson)+', '+md(g.lesson.date)+')';
   if(g.owner==='me')return p===ME?'내 연습 항목':'선수 개인 항목';
   if(g.coachId===ME)return '내가 배정한 항목';
   return cName(g.coachId)+' 배정';
@@ -641,11 +664,11 @@ const doneOf=(L,items)=>items.filter(i=>isChk(L,i)).length;
 
 /* ---------- logs ---------- */
 const pend={},timers={};
-const logId=(p,d)=>p+'__'+d;
+const logId=(p,d)=>p+(SOLO()?'__s__':'__')+d;
 function getLog(p,d){const id=logId(p,d);return Object.assign({},Store.data.logs[id]||{},pend[id]||{});}
 function updateLog(p,d,patch,delay){
   const id=logId(p,d);const cur=getLog(p,d);
-  const next=Object.assign({playerId:p,date:d,checks:{}},cur,patch,{updatedAt:Date.now()});
+  const next=Object.assign({playerId:p,date:d,checks:{}},cur,patch,{space:S.space||'academy',updatedAt:Date.now()});
   pend[id]=next;clearTimeout(timers[id]);
   timers[id]=setTimeout(()=>{const v=pend[id];Store.set('logs',id,v).then(()=>{if(pend[id]===v)delete pend[id];});},delay==null?500:delay);
 }
@@ -664,7 +687,7 @@ function fbHtml(list){
 }
 
 /* ---------- rounds ---------- */
-function newRound(kind){return{id:'r'+uid(),playerId:ME,kind:kind==='match'?'match':'practice',match:{name:'',round:'1R',rank:'',field:'',tension:0},date:today(),course:'',holes:Array.from({length:18},()=>({par:4,score:0,putt:2,fw:null,note:'',shots:[]})),misses:[],memo:'',createdAt:Date.now()};}
+function newRound(kind){return{id:'r'+uid(),playerId:ME,space:S.space||'academy',kind:kind==='match'&&!SOLO()?'match':'practice',match:{name:'',round:'1R',rank:'',field:'',tension:0},date:today(),course:'',holes:Array.from({length:18},()=>({par:4,score:0,putt:2,fw:null,note:'',shots:[]})),misses:[],memo:'',createdAt:Date.now()};}
 function rs(r){
   const o={n:0,tot:0,par:0,vs:0,putt:0,fw:0,fwN:0,gir:0,rec:0,recN:0,out:0,inn:0};
   (r.holes||[]).forEach((h,i)=>{
@@ -685,7 +708,7 @@ function shape(h){
 }
 const KIND=r=>r.kind==='match'?'match':'practice';
 const rTitle=r=>KIND(r)==='match'?((r.match&&r.match.name)||'대회명 미입력')+' '+((r.match&&r.match.round)||''):(r.course||'코스 미입력');
-const allRounds=()=>Object.entries(Store.data.rounds).map(([id,r])=>Object.assign({},r,{id}));
+const allRounds=()=>Object.entries(Store.data.rounds).map(([id,r])=>Object.assign({},r,{id})).filter(inSpace);
 const roundsOf=p=>allRounds().filter(r=>r.playerId===p).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
 
 /* ---------- render plumbing ---------- */
@@ -701,7 +724,8 @@ function render(){
   const y=window.scrollY;
   if(S.loading||(USER&&!Store.ready)){app.innerHTML='<div class="loading">기록을 불러오는 중…</div>';return;}
   let html;
-  if(!USER){html=vAuth();}
+  if(!S.space){html=vSpace();}
+  else if(!USER){html=vAuth();}
   else if(!prof(ME)){html=vOnboard();}
   else if(!(Store.data.consents[ME]&&Store.data.consents[ME].version===TERMS_VERSION)){html=vConsent();}
   else{
@@ -709,7 +733,7 @@ function render(){
     if(S.mode==='parent'&&!parentEnabled())S.mode='player';
     const valid=S.mode==='coach'?['inbox','lessons','players','report','me']:S.mode==='parent'?['kid','report','me']:['today','lessons','rounds','report','me'];
     if(!valid.includes(S.tab))S.tab=valid[0];
-    html=S.round?vRoundEdit():S.lesson?vLessonEdit():header()+'<main class="wrap">'+view()+'</main>'+tabbar();
+    html=S.round?vRoundEdit():S.lesson?vLessonEdit():S.hwEdit?vHwEdit():header()+'<main class="wrap">'+view()+'</main>'+tabbar();
   }
   if(S.termsView)html+='<div class="tview" role="dialog" aria-label="약관 및 정책"><div class="tbar"><b>약관 및 정책</b><button data-act="closeterms">닫기</button></div><iframe src="/terms#'+S.termsView+'" title="약관 및 정책"></iframe></div>';
   if(S.viewer)html+='<div class="viewer" data-act="closeviewer" role="dialog" aria-label="크게 보기"><button class="vclose" data-act="closeviewer" aria-label="닫기">'+I.x+'</button>'+(S.viewer.type==='video'?'<video src="'+mediaUrl(S.viewer.key)+'" controls autoplay playsinline></video>':'<img src="'+mediaUrl(S.viewer.key)+'" alt="레슨 사진">')+'</div>';
@@ -734,7 +758,7 @@ function header(){
     const dot=S.mode!=='coach'&&coachEnabled()&&coachPending()>0;
     m='<div class="modes" role="tablist" aria-label="모드">'+modes.map(x=>'<button role="tab" aria-selected="'+(S.mode===x[0])+'" data-act="mode" data-v="'+x[0]+'" class="'+(S.mode===x[0]?'on':'')+'">'+x[1]+(x[0]==='coach'&&dot?'<span class="mdot"></span>':'')+'</button>').join('')+'</div>';
   }
-  return '<header class="top"><div class="brand"><span class="logo">FeedUp.</span>'+(modes.length>2?'':'<span class="field">'+FIELD.label+'</span>')+'</div><div class="topr">'+m+'<button class="skin" data-act="skin" aria-label="색상 테마 바꾸기"><i></i></button></div></header>';
+  return '<header class="top"><div class="brand"><span class="logo">FeedUp.</span>'+(modes.length>2?'':'<span class="field'+(SOLO()?' sp':'')+'">'+(SOLO()?'개인':'ACADEMY')+'</span>')+'</div><div class="topr">'+m+'<button class="skin" data-act="skin" aria-label="색상 테마 바꾸기"><i></i></button></div></header>';
 }
 function tabbar(){
   const t=S.mode==='coach'
@@ -756,27 +780,32 @@ function agBlock(){
     (a.age==='u14'?'<div class="agg"><p>만 14세 미만은 보호자의 동의가 필요해요.</p><input type="text" data-field="ag-gname" value="'+esc(a.gname||'')+'" placeholder="보호자 이름" autocomplete="off"><input type="text" data-field="ag-gphone" value="'+esc(a.gphone||'')+'" placeholder="보호자 휴대폰 번호" inputmode="tel" autocomplete="off" style="margin-top:8px">'+row('gok','[필수] 보호자가 위 약관에 동의했어요','')+'</div>':'')+'</div>';
 }
 function vConsent(){
-  return '<div class="onb"><div class="in"><span class="chipk">'+FIELD.label+'</span><h1 class="logo">FeedUp.</h1>'+
+  return '<div class="onb"><div class="in">'+spChip()+'<h1 class="logo">FeedUp.</h1>'+
     '<p style="font-weight:800;font-size:18px;margin:0 0 4px">약관 동의가 필요해요</p><p class="hint" style="margin:0 0 6px">계속 이용하려면 아래 내용에 동의해 주세요.</p>'+agBlock()+
     (S.authErr?'<p class="hint" style="color:#E0322A;font-weight:700">'+esc(S.authErr)+'</p>':'')+
     '<button class="go'+(agOk()?' ready':'')+'" data-act="consent"'+(S.authBusy?' disabled':'')+'>'+(S.authBusy?'잠시만요…':'동의하고 계속하기')+'</button>'+
     '<div class="foot"><button data-act="logout"><b>로그아웃</b></button></div></div></div>';
 }
+function vSpace(){
+  const card=k=>{const x=SPACES[k];return '<button class="spopt" data-act="setspace" data-v="'+k+'"><span class="t">'+x.label+'</span><span class="d">'+x.desc+'</span><span class="tags">'+x.tags.map(t=>'<i>'+t+'</i>').join('')+'</span><span class="ar">'+I.right.replace('<svg','<svg width="18" height="18"')+'</span></button>';};
+  return '<div class="onb"><div class="in"><h1 class="logo">FeedUp.</h1><p class="spq">어떻게 사용하시나요?</p><p class="hint" style="margin:0 0 16px">나중에 내 정보에서 바꿀 수 있어요.</p>'+card('academy')+card('solo')+'<div class="foot" style="margin-top:18px">한 계정으로 둘 다 쓸 수 있어요</div></div></div>';
+}
+const spChip=()=>'<span class="chipk'+(SOLO()?' sp':'')+'">'+(S.space?SPACES[S.space].label:FIELD.label)+'</span>';
 function vAuth(){
   const su=S.authMode==='signup',D=S.drafts;
   const ready=authReady();
-  return '<div class="onb"><div class="in"><span class="chipk">'+FIELD.label+'</span><h1 class="logo">FeedUp.</h1>'+
+  return '<div class="onb"><div class="in">'+spChip()+'<h1 class="logo">FeedUp.</h1>'+
     (su?'<label for="aname">이름</label><input id="aname" type="text" data-field="name" value="'+esc(D.name||'')+'" placeholder="코치와 선수에게 보여요" autocomplete="name"><div style="height:22px"></div>':'')+
     '<label for="aemail">이메일</label><input id="aemail" type="email" data-field="email" value="'+esc(D.email||'')+'" placeholder="example@email.com" autocomplete="email" inputmode="email">'+
     '<div style="height:22px"></div><label for="apw">비밀번호</label><input id="apw" type="password" data-field="pw" value="'+esc(D.pw||'')+'" placeholder="'+(su?'8자 이상':'비밀번호')+'" autocomplete="'+(su?'new-password':'current-password')+'">'+
     (su?agBlock():'')+
     (S.authErr?'<p class="hint" style="color:#E0322A;font-weight:700">'+esc(S.authErr)+'</p>':'')+
     '<button class="go'+(ready?' ready':'')+'" data-act="auth"'+(S.authBusy?' disabled':'')+'>'+(S.authBusy?'잠시만요…':(su?'가입하고 시작하기':'시작하기'))+'</button>'+
-    '<div class="foot">'+(su?'이미 계정이 있나요? <button data-act="authmode" data-v="login"><b>로그인</b></button>':'처음이신가요? <button data-act="authmode" data-v="signup"><b>회원가입</b></button>')+'</div><div class="foot" style="margin-top:14px;font-size:12.5px"><button data-act="terms" data-v="terms">이용약관</button> · <button data-act="terms" data-v="privacy">개인정보 처리방침</button></div></div></div>';
+    '<div class="foot">'+(su?'이미 계정이 있나요? <button data-act="authmode" data-v="login"><b>로그인</b></button>':'처음이신가요? <button data-act="authmode" data-v="signup"><b>회원가입</b></button>')+'</div><div class="foot" style="margin-top:10px;font-size:12.5px"><button data-act="clearspace">'+(SOLO()?'아카데미로 바꾸기':'개인 · 개인 레슨으로 바꾸기')+'</button></div><div class="foot" style="margin-top:14px;font-size:12.5px"><button data-act="terms" data-v="terms">이용약관</button> · <button data-act="terms" data-v="privacy">개인정보 처리방침</button></div></div></div>';
 }
 function vOnboard(){
   const v=S.drafts.name!=null?S.drafts.name:S.defaultName;
-  return '<div class="onb"><div class="in"><span class="chipk">'+FIELD.label+'</span><h1 class="logo">FeedUp.</h1>'+
+  return '<div class="onb"><div class="in">'+spChip()+'<h1 class="logo">FeedUp.</h1>'+
     '<label for="onbname">이름</label><input id="onbname" type="text" data-field="name" placeholder="코치와 선수에게 보여요" value="'+esc(v)+'" autocomplete="name">'+
     '<p class="hint">같은 계정으로 선수도, 코치도 될 수 있어요.</p>'+
     '<button class="go'+(v.trim()?' ready':'')+'" data-act="start">시작하기</button>'+
@@ -788,8 +817,8 @@ function vToday(){
   const p=ME,d=S.date,L=getLog(p,d),gs=groups(p,d),items=allItems(p,d),done=doneOf(L,items),t=today();
   const fut=d>t,isT=d===t,dt=pd(d);
   let h='<section class="hero"><div><div class="bigdate num">'+md(d)+'</div><div class="sub muted">'+WD[dt.getDay()]+'요일'+(isT?', 오늘':'')+'</div></div>'+
-    '<div class="tally"><span class="n num">'+done+'</span><span class="d num">/'+items.length+'</span><div class="lab">완료한 연습</div></div></section>';
-  h+='<div class="seg" aria-hidden="true">'+items.map(x=>'<i class="'+(isChk(L,x)?'on':'')+'"></i>').join('')+'</div>';
+    '<div class="tally"><span class="n num">'+done+'</span><span class="d num">/'+(items.length+unnamedOwn(p))+'</span><div class="lab">완료한 연습</div></div></section>';
+  h+='<div class="seg" aria-hidden="true">'+items.map(x=>'<i class="'+(isChk(L,x)?'on':'')+'"></i>').join('')+'<i></i>'.repeat(unnamedOwn(p))+'</div>';
   const ws=monday(d);
   h+='<div class="week"><button class="nav" data-act="wk" data-v="-7" aria-label="이전 주">'+I.left+'</button>';
   for(let i=0;i<7;i++){
@@ -797,14 +826,17 @@ function vToday(){
     h+='<button class="day'+(day===d?' sel':'')+(day===t?' today':'')+(day>t?' fut':'')+'" data-act="date" data-v="'+day+'"><div class="w">'+WD[pd(day).getDay()]+'</div><div class="dn num">'+pd(day).getDate()+'</div><div class="fill"><b style="width:'+Math.round(pc*100)+'%"></b></div></button>';
   }
   h+='<button class="nav" data-act="wk" data-v="7" aria-label="다음 주">'+I.right+'</button></div>';
-  if(!items.length)h+='<div class="empty">연습 항목이 없어요. 내 정보에서 항목을 추가하거나 코치와 연결해 보세요.</div>';
-  else h+='<div class="list">'+gs.filter(g=>g.items.length).map(g=>{
+  const un=unnamedOwn(p);
+  const ph=n=>Array.from({length:n},(_,i)=>'<button class="drill ph" data-act="gotodrills"><span class="box"></span><span><div class="nm">연습 항목 '+(ownDrills(p).filter(d=>(d.name||'').trim()).length+i+1)+'</div><div class="ds">눌러서 이름 정하기</div></span><span class="tg num"></span></button>').join('');
+  if(!items.length&&!un)h+='<div class="empty">연습 항목이 없어요. 내 정보에서 항목을 추가하거나 코치와 연결해 보세요.</div>';
+  else h+='<div class="list">'+gs.filter(g=>g.items.length||(g.owner==='me'&&un)).map(g=>{
     const gi=items.filter(i=>i.group===gLabel(g,p));
-    return (gs.length>1?'<div class="grp"><span>'+esc(gLabel(g,p))+'</span><span class="num">'+doneOf(L,gi)+'/'+gi.length+'</span></div>':'')+gi.map(x=>{
+    return (gs.length>1||(g.owner==='me'&&un)?'<div class="grp"><span>'+esc(gLabel(g,p))+'</span><span class="num">'+doneOf(L,gi)+'/'+(gi.length+(g.owner==='me'?un:0))+'</span></div>':'')+gi.map(x=>{
       const on=isChk(L,x);
       return '<button class="drill'+(on?' on':'')+'" data-act="chk" data-v="'+esc(x.key)+'"'+(fut?' disabled':'')+' aria-pressed="'+on+'"><span class="box">'+I.check+'</span><span><div class="nm">'+esc(x.name)+'</div>'+(x.desc?'<div class="ds">'+esc(x.desc)+'</div>':'')+'</span><span class="tg num">'+esc(x.target||'')+'</span></button>';
-    }).join('');
+    }).join('')+(g.owner==='me'&&un?ph(un):'');
   }).join('')+'</div>';
+  if(un)h+='<div class="phcta">이름을 정하면 체크할 수 있어요. <button class="link" data-act="gotodrills">내 정보에서 정하기</button></div>';
   if(fut){h+='<p class="status"><span class="dot"></span>아직 오지 않은 날이에요. 당일에 체크할 수 있어요.</p>';return h;}
   h+='<h2>오늘 연습 메모 <small>연결된 코치가 함께 봐요</small></h2><textarea data-field="memo" placeholder="잘된 점, 어려웠던 점, 컨디션">'+esc(L.memo||'')+'</textarea>';
   h+=fbHtml(fbsFor('log',logId(p,d),p));
@@ -817,18 +849,23 @@ function vToday(){
 
 /* ---------- player: rounds ---------- */
 function vRounds(){
-  const all=roundsOf(ME),list=S.rkind==='all'?all:all.filter(r=>KIND(r)===S.rkind);
+  const all=roundsOf(ME),solo=SOLO(),list=solo||S.rkind==='all'?all:all.filter(r=>KIND(r)===S.rkind);
   const st=list.map(rs).filter(s=>s.n===18);
   const avg=st.length?(st.reduce((a,s)=>a+s.tot,0)/st.length).toFixed(1):'–';
-  const lab=S.rkind==='match'?'시합':S.rkind==='practice'?'연습 라운드':'전체';
+  const lab=solo?'전체':S.rkind==='match'?'시합':S.rkind==='practice'?'연습 라운드':'전체';
   let h='<section class="hero"><div><div class="bigdate num">'+avg+'</div><div class="sub muted">18홀 평균 스코어 ('+lab+')</div></div><div class="tally"><span class="n num">'+list.length+'</span><div class="lab">기록한 '+(S.rkind==='match'?'시합':'라운드')+'</div></div></section>';
+  if(solo){
+    h+='<button class="btn" data-act="newround" data-v="practice" style="margin:0 0 16px">라운드 기록</button>';
+    if(!list.length)return h+'<div class="empty">라운드를 마치면 홀별 스코어와 퍼트, 페어웨이를 기록해 보세요. 홀마다 샷 분석도 남길 수 있어요.</div>';
+    return h+list.map(roundCard).join('');
+  }
   h+='<div style="display:flex;gap:8px;margin:0 0 14px"><button class="btn" data-act="newround" data-v="practice" style="margin:0">연습 라운드 기록</button><button class="btn" data-act="newround" data-v="match" style="margin:0;background:var(--green)">시합 기록</button></div>';
   h+='<div class="tabs2">'+[['all','전체'],['practice','연습'],['match','시합']].map(x=>'<button class="'+(S.rkind===x[0]?'on':'')+'" data-act="rk" data-v="'+x[0]+'">'+x[1]+' <span class="num">'+(x[0]==='all'?all.length:all.filter(r=>KIND(r)===x[0]).length)+'</span></button>').join('')+'</div>';
   if(!list.length)return h+'<div class="empty">'+(S.rkind==='match'?'시합을 마치면 대회명, 라운드, 순위와 함께 홀별 기록을 남겨 보세요.':'라운드를 마치면 홀별 스코어와 퍼트, 페어웨이를 기록해 보세요. 미스 샷 원인도 함께 남길 수 있어요.')+'</div>';
   return h+list.map(roundCard).join('');
 }
 function kindBadge(r){
-  if(KIND(r)!=='match')return '<span class="badge log">연습</span>';
+  if(KIND(r)!=='match')return SOLO()?'':'<span class="badge log">연습</span>';
   const m=r.match||{};
   return '<span class="badge match">시합'+(m.rank?' '+esc(m.rank)+'위'+(m.field?'/'+esc(m.field):''):'')+'</span>';
 }
@@ -841,10 +878,10 @@ function roundCard(r){
 }
 function vRoundEdit(){
   const r=S.round,ro=S.roundRO,mine=r.playerId===ME,hi=S.hole,h=r.holes[hi],s=rs(r);
-  const kn=KIND(r)==='match'?'시합':'연습 라운드',dis=ro?' disabled':'',m=r.match||{};
+  const kn=KIND(r)==='match'?'시합':SOLO()?'라운드':'연습 라운드',dis=ro?' disabled':'',m=r.match||{};
   let x='<div class="editbar"><button class="link" data-act="closeround">닫기</button><span class="t">'+(mine?(ro?kn:(Store.data.rounds[r.id]?kn+' 수정':kn+' 기록')):esc(pName(r.playerId))+' '+kn)+'</span>'+
     (ro?(mine?'<button class="link" data-act="editround" style="color:var(--green)">수정</button>':'<span style="width:40px"></span>'):'<button class="link" data-act="saveround" style="color:var(--green)">저장</button>')+'</div><main class="wrap" style="padding-bottom:60px">';
-  if(!ro)x+='<div class="pills" style="margin-bottom:10px">'+[['practice','연습 라운드'],['match','시합']].map(a=>'<button class="pill'+(KIND(r)===a[0]?' on':'')+'" data-act="rkind" data-v="'+a[0]+'">'+a[1]+'</button>').join('')+'</div>';
+  if(!ro&&!SOLO())x+='<div class="pills" style="margin-bottom:10px">'+[['practice','연습 라운드'],['match','시합']].map(a=>'<button class="pill'+(KIND(r)===a[0]?' on':'')+'" data-act="rkind" data-v="'+a[0]+'">'+a[1]+'</button>').join('')+'</div>';
   x+='<div class="grid2"><input type="date" data-field="r-date" value="'+esc(r.date)+'" aria-label="날짜"'+dis+'><input type="text" data-field="r-course" value="'+esc(r.course)+'" placeholder="코스 이름"'+dis+'></div>';
   if(KIND(r)==='match'){
     x+='<div class="card" style="margin-top:10px"><div class="row"><div class="k">대회명</div><input type="text" data-field="m-name" value="'+esc(m.name||'')+'" placeholder="예: OO배 주니어 골프대회"'+dis+'></div>'+
@@ -994,7 +1031,7 @@ function vReport(){
     h+='<div class="kpis" style="margin-top:0"><div class="kpi"><div class="v num">'+C.lessons.length+'</div><div class="l">받은 레슨</div></div><div class="kpi"><div class="v num">'+(C.hw.tot?pct(C.hw.done,C.hw.tot):'–')+(C.hw.tot?'<small>%</small>':'')+'</div><div class="l">숙제 수행률'+(C.hw.tot?' ('+C.hw.done+'/'+C.hw.tot+')':'')+'</div></div></div>';
     if(C.topics.length)h+='<div class="card" style="padding:4px 16px;margin-top:8px">'+C.topics.map(x=>'<div class="miss"><span>'+esc(x[0])+'</span><b style="color:var(--green)">'+x[1]+'회</b></div>').join('')+'</div>';
   }else h+='<div class="empty">이 기간에 기록된 레슨이 없어요.</div>';
-  h+='<h2>라운드 <small>연습 '+C.rp.count+'회, 시합 '+C.rm.count+'회</small></h2>';
+  h+='<h2>라운드 <small>'+(SOLO()?C.rnd.count+'회':'연습 '+C.rp.count+'회, 시합 '+C.rm.count+'회')+'</small></h2>';
   if(C.rnd.has){
     if(C.rp.has&&C.rm.has){
       const P=C.rp,M=C.rm,gap=(P.avg&&M.avg)?(M.avg-P.avg):null;
@@ -1011,7 +1048,7 @@ function vReport(){
   }else h+='<div class="empty">이 기간에 기록한 라운드가 없어요.</div>';
   h+='<h2>'+(coach?'피드백':'받은 피드백')+' <small>'+C.fbs.length+'개</small></h2>';
   h+=C.fbs.length?C.fbs.map(f=>'<div class="fb" style="margin-top:8px"><div class="who2">'+md(f.date)+' '+f.type+', '+esc(f.coachId===ME?'내 피드백':cName(f.coachId)+'')+'</div><p>'+esc(f.text)+'</p></div>').join(''):'<div class="empty">이 기간의 피드백이 없어요.</div>';
-  const rid=ME+'__'+p+'__'+R.key,saved=Store.data.reports[rid],live=S.ai.key===rid;
+  const rid=ME+'__'+p+'__'+(SOLO()?'S':'')+R.key,saved=Store.data.reports[rid],live=S.ai.key===rid;
   const text=live&&(S.ai.busy||S.ai.text)?S.ai.text:(saved?saved.text:'');
   h+='<div class="ai"><h3>'+I.spark+'AI 코칭 정리'+(AI_LIVE?'':' <span class="demo">데모</span>')+'<span class="demo">프리미엄</span></h3><div class="meta">'+(!AI_LIVE&&!text?'지금은 기록을 바탕으로 한 데모 정리예요. 정식 오픈 때 AI 분석으로 바뀌어요.':saved&&!live?'정리한 날 '+md(ds(new Date(saved.createdAt))):(coach?'내 피드백과 배정 항목 중심으로 정리해요':parent?'자녀의 기록과 코치 피드백을 쉽게 정리해요':'모든 코치의 피드백과 기록을 합쳐 정리해요'))+'</div>';
   if(text||(S.ai.busy&&live))h+='<div class="out" id="aiout">'+(text?esc(text):'분석하는 중…')+'</div>';
@@ -1072,7 +1109,7 @@ async function demoSummary(C,coach){
 }
 async function runAI(){
   const coach=S.mode==='coach',parent=S.mode==='parent',p=reportPlayer();if(!p)return;
-  const C=compute(p),R=C.R,rid=ME+'__'+p+'__'+R.key;
+  const C=compute(p),R=C.R,rid=ME+'__'+p+'__'+(SOLO()?'S':'')+R.key;
   const payload={
     선수:pName(p),기간:(S.period==='week'?'주간 ':'월간 ')+R.s+'~'+R.e,
     연습항목:C.items.map(d=>'['+d.group+'] '+d.name+' '+(d.target||'')),
@@ -1105,8 +1142,8 @@ async function runAI(){
 /* ---------- coach: inbox ---------- */
 function inboxItems(){
   const ps=new Set(playersOf(ME)),out=[];
-  Object.entries(Store.data.logs).forEach(([id,L])=>{if(L.submitted&&ps.has(L.playerId))out.push({kind:'log',id,p:L.playerId,date:L.date,o:L,mine:Store.data.feedback[fbId(ME,'log',id)]});});
-  allLessons().forEach(l=>{if(ps.has(l.playerId)&&l.coachId===ME)out.push({kind:'lesson',id:l.id,p:l.playerId,date:l.date,o:l,mine:Store.data.feedback[fbId(ME,'lesson',l.id)]});});
+  Object.entries(Store.data.logs).forEach(([id,L])=>{if(L.submitted&&ps.has(L.playerId)&&inSpace(L))out.push({kind:'log',id,p:L.playerId,date:L.date,o:L,mine:Store.data.feedback[fbId(ME,'log',id)]});});
+  allLessons().forEach(l=>{if(ps.has(l.playerId)&&l.coachId===ME&&l.author!=='coach')out.push({kind:'lesson',id:l.id,p:l.playerId,date:l.date,o:l,mine:Store.data.feedback[fbId(ME,'lesson',l.id)]});});
   allRounds().forEach(r=>{if(ps.has(r.playerId))out.push({kind:'round',id:r.id,p:r.playerId,date:r.date,o:r,mine:Store.data.feedback[fbId(ME,'round',r.id)]});});
   return out.sort((a,b)=>b.date.localeCompare(a.date));
 }
@@ -1183,13 +1220,15 @@ function mediaHtml(list,edit){
     (edit&&list.length+S.uploading<6?'<label class="mitem"><span class="madd"><b>+</b>사진·영상</span><input type="file" class="mfile" accept="image/*,video/*" data-field="mfile" aria-label="사진이나 영상 추가"></label>':'')+'</div>';
 }
 function lessonCard(l,viewer){
-  const hw=hwLines(l);
-  let h='<div class="inbox lcard"><div class="hd"><span class="pn">'+esc(viewer==='coach'?pName(l.playerId):lessonCoach(l))+'</span><span class="dt num">'+l.date.replace(/-/g,'.')+'</span></div>';
+  const hw=hwLines(l),byCoach=l.author==='coach',mineL=byCoach?l.coachId===ME:l.playerId===ME;
+  let h='<div class="inbox lcard"><div class="hd"><span class="pn">'+esc(viewer==='coach'?pName(l.playerId):lessonCoach(l))+'</span><span>'+(byCoach?'<span class="badge match">'+(viewer==='coach'?'내가 작성':'코치가 작성')+'</span> ':'')+'<span class="dt num">'+l.date.replace(/-/g,'.')+'</span></span></div>';
   if((l.topics||[]).length)h+='<div class="ltops">'+l.topics.map(t=>'<span class="badge log">'+esc(t)+'</span>').join('')+'</div>';
   if(l.content)h+='<div class="body" style="white-space:pre-wrap">'+esc(l.content)+'</div>';
   if(hw.length)h+='<div class="hwbox"><div class="k">숙제'+(viewer==='player'?' <span class="muted">(오늘 체크리스트에 표시돼요)</span>':'')+'</div>'+hw.map(x=>'<div class="hwi">'+esc(x)+'</div>').join('')+'</div>';
   h+=mediaHtml(l.media);
-  if(viewer==='coach'){
+  if(viewer==='coach'&&byCoach){
+    h+=fbHtml(fbsFor('lesson',l.id,l.playerId).filter(f=>f.coachId!==ME));
+  }else if(viewer==='coach'){
     const ref='lesson:'+l.id,mine=Store.data.feedback[fbId(ME,'lesson',l.id)],draft=S.drafts[ref]!=null?S.drafts[ref]:(mine?mine.text:'');
     const others=fbsFor('lesson',l.id,l.playerId).filter(f=>f.coachId!==ME);
     h+=others.map(f=>'<div class="fbo"><b>'+esc(cName(f.coachId))+'</b>: '+esc(f.text)+'</div>').join('');
@@ -1197,7 +1236,16 @@ function lessonCard(l,viewer){
   }else{
     h+=fbHtml(fbsFor('lesson',l.id,l.playerId));
   }
-  if(viewer==='player')h+='<div class="acts"><span></span><span style="display:flex;gap:6px"><button class="rbtn" data-act="editlesson" data-v="'+esc(l.id)+'">수정</button><button class="rbtn del" data-act="dellesson" data-v="'+esc(l.id)+'">삭제</button></span></div>';
+  if(mineL&&(viewer==='player'||byCoach))h+='<div class="acts"><span></span><span style="display:flex;gap:6px"><button class="rbtn" data-act="editlesson" data-v="'+esc(l.id)+'">수정</button><button class="rbtn del" data-act="dellesson" data-v="'+esc(l.id)+'">삭제</button></span></div>';
+  return h+'</div>';
+}
+function hwCard(x,viewer){
+  const lines=hwLines(x),t=today(),until=addD(x.date,6),active=x.date<=t&&t<=until;
+  const latest=hwGroups(x.playerId,t)[0],cur=active&&latest&&latest.lesson.id===x.id;
+  let h='<div class="inbox hwcard"><div class="hd"><span class="pn">'+esc(viewer==='coach'?pName(x.playerId):lessonCoach(x))+'</span><span>'+(cur?'<span class="badge match">진행 중</span> ':'<span class="badge wait">끝남</span> ')+'<span class="dt num">'+md(x.date)+' – '+md(until)+'</span></span></div>';
+  h+='<div class="hwbox" style="margin-top:8px"><div class="k">숙제'+(viewer==='player'?' <span class="muted">(오늘 체크리스트에 표시돼요)</span>':'')+'</div>'+lines.map(z=>'<div class="hwi">'+esc(z)+'</div>').join('')+'</div>';
+  if(x.memo)h+='<div class="memo">'+esc(x.memo)+'</div>';
+  if(viewer==='coach')h+='<div class="acts"><span></span><span style="display:flex;gap:6px"><button class="rbtn" data-act="edithw" data-v="'+esc(x.id)+'">수정</button><button class="rbtn del" data-act="delhw" data-v="'+esc(x.id)+'">삭제</button></span></div>';
   return h+'</div>';
 }
 function vLessons(){
@@ -1205,31 +1253,57 @@ function vLessons(){
   if(S.mode==='coach'){
     const ps=playersOf(ME);
     if(!ps.length)return '<div class="empty" style="margin-top:12px">연결된 선수가 없어요. 선수 탭에서 초대 코드를 공유하세요.</div>';
-    let list=allLessons().filter(l=>ps.includes(l.playerId)&&l.coachId===ME);
-    if(S.lessonPlayer!=='all')list=list.filter(l=>l.playerId===S.lessonPlayer);
+    let list=allLessons().filter(l=>ps.includes(l.playerId)&&l.coachId===ME&&l.author!=='coach');
+    let mine=SOLO()?allLessons().filter(l=>ps.includes(l.playerId)&&l.coachId===ME&&l.author==='coach'):[];
+    let hws=allHw().filter(x=>x.coachId===ME&&ps.includes(x.playerId));
+    if(S.lessonPlayer!=='all'){list=list.filter(l=>l.playerId===S.lessonPlayer);mine=mine.filter(l=>l.playerId===S.lessonPlayer);}
+    mine.sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
+    if(S.lessonPlayer!=='all'){hws=hws.filter(x=>x.playerId===S.lessonPlayer);}
     list.sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
+    hws.sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
     let h='<section class="hero"><div><div class="bigdate num">'+list.filter(l=>l.date.slice(0,7)===mon).length+'</div><div class="sub muted">이번 달 선수들이 기록한 내 레슨</div></div></section>';
+    h+=SOLO()?'<div style="display:flex;gap:8px;margin:0 0 14px"><button class="btn" data-act="newclesson" style="margin:0;flex:1">레슨 기록하기</button><button class="btn ghost" data-act="newhw" style="margin:0;flex:1">숙제 보내기</button></div>':'<button class="btn" data-act="newhw" style="margin:0 0 14px">숙제 보내기</button>';
     h+='<div class="chips"><button class="'+(S.lessonPlayer==='all'?'on':'')+'" data-act="lpf" data-v="all">모든 선수</button>'+ps.map(x=>'<button class="'+(S.lessonPlayer===x?'on':'')+'" data-act="lpf" data-v="'+esc(x)+'">'+esc(pName(x))+'</button>').join('')+'</div>';
+    if(mine.length)h+='<h2>내가 기록한 레슨 <small>'+mine.length+'개</small></h2>'+mine.slice(0,20).map(l=>lessonCard(l,'coach')).join('');
+    if(hws.length)h+='<h2>보낸 숙제 <small>'+hws.length+'개</small></h2>'+hws.slice(0,10).map(x=>hwCard(x,'coach')).join('');
+    h+='<h2>선수가 기록한 레슨 <small>'+list.length+'개</small></h2>';
     if(!list.length)return h+'<div class="empty">선수가 레슨을 기록하면서 코치로 나를 고르면 여기에 모여요. 내용을 보고 피드백을 남겨 주세요.</div>';
     return h+list.map(l=>lessonCard(l,'coach')).join('');
   }
-  const list=lessonsOf(ME);
+  const list=lessonsOf(ME),hws=allHw().filter(x=>x.playerId===ME).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
   let h='<section class="hero"><div><div class="bigdate num">'+list.filter(l=>l.date.slice(0,7)===mon).length+'</div><div class="sub muted">이번 달 받은 레슨</div></div><div class="tally"><span class="n num">'+list.length+'</span><div class="lab">전체 레슨</div></div></section>';
   h+='<button class="btn" data-act="newlesson" style="margin:0 0 16px">레슨 기록하기</button>';
+  if(hws.length)h+='<h2 style="margin-top:4px">코치가 보낸 숙제</h2>'+hws.slice(0,3).map(x=>hwCard(x,'player')).join('')+'<h2>레슨 기록</h2>';
   if(!list.length)return h+'<div class="empty">레슨이 끝나면 배운 내용과 숙제를 적고 사진이나 짧은 영상을 남겨 보세요. 숙제는 오늘 체크리스트에 자동으로 들어가요.</div>';
   return h+list.map(l=>lessonCard(l,'player')).join('');
 }
-function newLesson(){const cs=coachesOf(ME);return{id:'l'+uid(),playerId:ME,coachId:cs.length===1?cs[0]:'',coachName:'',date:today(),topics:[],content:'',homework:'',media:[],createdAt:Date.now()};}
+function newHw(pid){return{id:'h'+uid(),coachId:ME,playerId:pid||'',date:today(),homework:'',memo:'',space:S.space||'academy',createdAt:Date.now()};}
+function vHwEdit(){
+  const x=S.hwEdit,ps=playersOf(ME),isNew=!(Store.data.homework||{})[x.id];
+  let h='<div class="editbar"><button class="link" data-act="closehw">닫기</button><span class="t">'+(isNew?'숙제 보내기':'숙제 수정')+'</span><button class="link" data-act="savehw" style="color:var(--green)">보내기</button></div><main class="wrap" style="padding-bottom:60px">';
+  h+='<div class="row"><div class="k">선수</div><div class="pills">'+ps.map(p=>'<button class="pill'+(x.playerId===p?' on':'')+'" data-act="hwp" data-v="'+esc(p)+'">'+esc(pName(p))+'</button>').join('')+'</div></div>';
+  h+='<div class="row"><div class="k">시작일</div><input type="date" data-field="hw-date" value="'+esc(x.date)+'"></div>';
+  h+='<div class="row"><div class="k">숙제 <span class="muted">(한 줄에 하나씩, 시작일부터 1주일 동안 선수 체크리스트에 매일 표시)</span></div><textarea data-field="hw-text" placeholder="예:&#10;하프스윙 왼손목 고정 50개&#10;퍼터 1m 연속 넣기 30개" style="min-height:120px">'+esc(x.homework)+'</textarea></div>';
+  h+='<div class="row"><div class="k">메모 (선택)</div><textarea data-field="hw-memo" placeholder="숙제할 때 신경 쓸 점">'+esc(x.memo||'')+'</textarea></div>';
+  h+='<p class="muted" style="font-size:12.5px;margin:0 2px 12px">새 숙제를 보내면 선수의 이전 숙제는 체크리스트에서 사라지고 이 숙제로 바뀌어요.</p>';
+  h+='<button class="btn" data-act="savehw">'+(isNew?'숙제 보내기':'수정 내용 저장')+'</button>';
+  if(!isNew)h+='<button class="btn danger" data-act="delhw" data-v="'+esc(x.id)+'">이 숙제 삭제</button>';
+  return h+'</main>';
+}
+function newLesson(){const cs=coachesOf(ME);return{id:'l'+uid(),playerId:ME,space:S.space||'academy',coachId:cs.length===1?cs[0]:'',coachName:'',date:today(),topics:[],content:'',homework:'',media:[],createdAt:Date.now()};}
+function newCoachLesson(pid){const ps=playersOf(ME);return{id:'l'+uid(),playerId:pid||(ps.length===1?ps[0]:''),author:'coach',space:'solo',coachId:ME,coachName:'',date:today(),topics:[],content:'',homework:'',media:[],createdAt:Date.now()};}
 function vLessonEdit(){
-  const l=S.lesson,cs=coachesOf(ME),isNew=!Store.data.lessons[l.id];
+  const l=S.lesson,cs=coachesOf(ME),isNew=!Store.data.lessons[l.id],byCoach=l.author==='coach';
   let x='<div class="editbar"><button class="link" data-act="closelesson">닫기</button><span class="t">'+(isNew?'레슨 기록':'레슨 수정')+'</span><button class="link" data-act="savelesson" style="color:var(--green)">저장</button></div><main class="wrap" style="padding-bottom:60px">';
-  x+='<div class="row"><div class="k">레슨 코치</div><div class="pills">'+cs.map(c=>'<button class="pill'+(l.coachId===c?' on':'')+'" data-act="lcoach" data-v="'+esc(c)+'">'+esc(cName(c))+'</button>').join('')+'<button class="pill'+(!l.coachId?' on':'')+'" data-act="lcoach" data-v="">'+(cs.length?'다른 코치':'코치 이름 직접 입력')+'</button></div>'+
+  if(byCoach){const ps=playersOf(ME);x+='<div class="row"><div class="k">선수</div><div class="pills">'+ps.map(p=>'<button class="pill'+(l.playerId===p?' on':'')+'" data-act="lplayer" data-v="'+esc(p)+'"'+(isNew?'':' disabled')+'>'+esc(pName(p))+'</button>').join('')+'</div>'+(isNew?'':'<div class="muted" style="font-size:12px;margin-top:6px">저장한 레슨은 선수를 바꿀 수 없어요.</div>')+'</div>';}
+  else x+='<div class="row"><div class="k">레슨 코치</div><div class="pills">'+cs.map(c=>'<button class="pill'+(l.coachId===c?' on':'')+'" data-act="lcoach" data-v="'+esc(c)+'">'+esc(cName(c))+'</button>').join('')+'<button class="pill'+(!l.coachId?' on':'')+'" data-act="lcoach" data-v="">'+(cs.length?'다른 코치':'코치 이름 직접 입력')+'</button></div>'+
     (!l.coachId?'<input type="text" data-field="l-cname" value="'+esc(l.coachName||'')+'" placeholder="코치 이름 (선택)" style="margin-top:8px">':'')+'</div>';
   x+='<div class="row"><div class="k">날짜</div><input type="date" data-field="l-date" value="'+esc(l.date)+'"></div>';
   x+='<div class="row"><div class="k">주제 (여러 개 선택 가능)</div><div class="pills">'+LESSON_TOPICS.map(t=>'<button class="pill'+(l.topics.includes(t)?' on':'')+'" data-act="ltopic" data-v="'+esc(t)+'">'+esc(t)+'</button>').join('')+'</div></div>';
   x+='<div class="row"><div class="k">오늘 배운 내용</div><textarea data-field="l-content" placeholder="예: 백스윙 탑에서 왼손목 각도 유지. 다운스윙 시작을 하체로." style="min-height:120px">'+esc(l.content)+'</textarea></div>';
   x+='<div class="row"><div class="k">숙제 <span class="muted">(한 줄에 하나씩, 1주일 동안 체크리스트에 매일 표시)</span></div><textarea data-field="l-hw" placeholder="예:&#10;하프스윙 왼손목 고정 50개&#10;거울 보고 탑 자세 3분">'+esc(l.homework)+'</textarea></div>';
-  x+='<div class="row"><div class="k">사진·영상 <span class="muted">(최대 6개, 영상은 10초 미만)</span></div>'+mediaHtml(l.media,true)+(S.mediaMsg?'<div class="mmsg" role="alert">'+esc(S.mediaMsg)+'</div>':'')+'</div>';
+  if(byCoach&&!l.playerId)x+='<div class="row"><div class="k">사진·영상</div><div class="muted" style="font-size:13px">선수를 먼저 골라 주세요.</div></div>';
+  else x+='<div class="row"><div class="k">사진·영상 <span class="muted">(최대 6개, 영상은 10초 미만)</span></div>'+mediaHtml(l.media,true)+(S.mediaMsg?'<div class="mmsg" role="alert">'+esc(S.mediaMsg)+'</div>':'')+'</div>';
   x+='<button class="btn" data-act="savelesson"'+(S.uploading?' disabled':'')+'>'+(S.uploading?'올리는 중이에요…':(isNew?'레슨 저장':'수정 내용 저장'))+'</button>';
   if(!isNew)x+='<button class="btn danger" data-act="dellesson" data-v="'+esc(l.id)+'">이 레슨 삭제</button>';
   return x+'</main>';
@@ -1333,7 +1407,7 @@ async function addMedia(file){
         if(file.size>40*1024*1024)throw new Error('영상 용량이 너무 커요('+Math.round(file.size/1048576)+'MB). 아이폰은 설정 > 카메라 > 비디오 녹화를 1080p로 바꾸고 찍어 주세요.');
       }
     }else throw new Error('사진이나 영상 파일만 올릴 수 있어요.');
-    const url='/api/media?lesson='+encodeURIComponent(l.id);
+    const url='/api/media?lesson='+encodeURIComponent(l.id)+(l.author==='coach'?'&player='+encodeURIComponent(l.playerId):'');
     let j=null;
     for(let t=0;t<2&&!j;t++){
       try{setUp('올리는 중 0%');j=await uploadBlob(url,blob,type,p=>setUp('올리는 중 '+Math.round(p*100)+'%'));}
@@ -1376,7 +1450,8 @@ function vChild(){
 function vMe(){
   const me=prof(ME);
   const nm=S.drafts.myname!=null?S.drafts.myname:me.name;
-  let h='<h2 style="margin-top:8px">이름</h2><div class="addline" style="margin-top:0"><input type="text" data-field="myname" value="'+esc(nm)+'"><button class="btn sm" data-act="savename">저장</button></div>';
+  let h='<h2 style="margin-top:8px">사용 방식</h2><div class="tabs2" style="margin:0">'+['academy','solo'].map(k=>'<button class="'+(S.space===k?'on':'')+'" data-act="switchspace" data-v="'+k+'">'+SPACES[k].label+'</button>').join('')+'</div><p class="muted" style="font-size:12.5px;margin:6px 2px 0">아카데미와 개인의 연습 체크, 레슨, 라운드 기록은 따로 보관돼요. 코치·학부모 연결은 함께 써요.</p>';
+  h+='<h2>이름</h2><div class="addline" style="margin-top:0"><input type="text" data-field="myname" value="'+esc(nm)+'"><button class="btn sm" data-act="savename">저장</button></div>';
   const mine=links().filter(l=>l.playerId===ME&&prof(l.coachId));
   h+='<h2>내 코치 <small>'+mine.filter(l=>l.status==='active').length+'명</small></h2><div class="card" style="padding:4px 16px">'+(mine.length?mine.map(l=>'<div class="prow"><span>'+esc(cName(l.coachId))+' '+(l.status==='pending'?'<span class="badge wait">승인 대기</span>':'')+'</span><button class="rbtn del" data-act="unlink" data-v="'+esc(l.id)+'">'+(l.status==='pending'?'요청 취소':'연결 해제')+'</button></div>').join(''):'<p class="muted" style="font-size:14px">연결된 코치가 없어요.</p>')+'</div>';
   h+='<div class="addline"><input type="text" data-field="joincode" placeholder="코치에게 받은 코드 6자리" value="'+esc(S.drafts.joincode||'')+'" autocapitalize="characters" maxlength="8"><button class="btn sm" data-act="join">연결 요청</button></div>';
@@ -1438,6 +1513,9 @@ document.addEventListener('click',async e=>{
       if(!n){toast('이름을 입력하세요.');break;}
       await Store.set('profiles',ME,{name:n,share:false,field:FIELD.id,createdAt:Date.now()});delete S.drafts.name;render();break;}
     case'authmode':S.authMode=v;S.authErr='';render();break;
+    case'setspace':S.space=v;lsSet('fu_space',v);render();try{window.scrollTo(0,0);}catch(e){}break;
+    case'clearspace':S.space=null;lsSet('fu_space',null);render();break;
+    case'switchspace':flushLogs();S.space=v;lsSet('fu_space',v);S.tab=null;S.dd={};S.rkind='all';S.ai={busy:false,key:null,text:''};render();try{window.scrollTo(0,0);}catch(e){}toast((v==='solo'?'개인 · 개인 레슨':'아카데미')+'으로 바꿨어요.');break;
     case'ag':S.ag[v]=!S.ag[v];render();break;
     case'agall':{const on=!(S.ag.terms&&S.ag.privacy&&S.ag.overseas);S.ag.terms=S.ag.privacy=S.ag.overseas=on;render();break;}
     case'agage':S.ag.age=v;render();break;
@@ -1469,6 +1547,7 @@ document.addEventListener('click',async e=>{
     case'logout':ask('로그아웃할까요?','로그아웃',async()=>{try{await API.req('/auth/logout',{method:'POST'});}catch(e){}location.reload();});break;
     case'skin':SKIN=SKIN==='blue'?'green':'blue';lsSet('sn_skin',SKIN);applySkin();render();break;
     case'mode':setMode(v);break;
+    case'gotodrills':flushLogs();S.tab='me';S.dd={};render();setTimeout(()=>{const h=[...document.querySelectorAll('h2')].find(x=>x.textContent.startsWith('내 연습 항목'));if(h)window.scrollTo({top:h.getBoundingClientRect().top+window.scrollY-70,behavior:'smooth'});const inp=document.querySelector('[data-field=dn][data-w=me]');if(inp&&!inp.value)inp.focus({preventScroll:true});},60);break;
     case'tab':flushLogs();S.tab=v;S.dd={};render();try{window.scrollTo(0,0);}catch(e){}break;
     case'date':flushLogs();S.date=v;render();break;
     case'wk':flushLogs();S.date=addD(S.date,+v);render();break;
@@ -1495,11 +1574,26 @@ document.addEventListener('click',async e=>{
     case'mtension':r.match.tension=+r.match.tension===+v?0:+v;render();break;
     case'kid':S.child=v;S.ai={busy:false,key:null,text:''};render();break;
     case'lpf':S.lessonPlayer=v;render();break;
+    case'newhw':{const ps=playersOf(ME);S.hwEdit=newHw(S.lessonPlayer!=='all'?S.lessonPlayer:(ps.length===1?ps[0]:''));S.hwSnap=JSON.stringify(S.hwEdit);render();try{window.scrollTo(0,0);}catch(e){}break;}
+    case'edithw':{const src=(Store.data.homework||{})[v];if(!src)break;S.hwEdit=Object.assign({},src,{id:v});S.hwSnap=JSON.stringify(S.hwEdit);render();try{window.scrollTo(0,0);}catch(e){}break;}
+    case'hwp':S.hwEdit.playerId=v;render();break;
+    case'closehw':
+      if(JSON.stringify(S.hwEdit)===S.hwSnap){S.hwEdit=null;render();break;}
+      ask('저장하지 않은 내용은 사라져요. 닫을까요?','닫기',()=>{S.hwEdit=null;render();},true);break;
+    case'savehw':{
+      const x=S.hwEdit;
+      if(!x.playerId){toast('선수를 골라 주세요.');break;}
+      if(!hwLines(x).length){toast('숙제를 한 줄 이상 적어 주세요.');break;}
+      const o=Object.assign({},x),id=o.id;delete o.id;delete o.isHw;const existed=!!(Store.data.homework||{})[id];
+      Store.set('homework',id,o);S.hwEdit=null;toast(existed?'숙제를 수정했어요.':pName(o.playerId)+' 선수에게 숙제를 보냈어요.');render();break;}
+    case'delhw':ask('이 숙제를 삭제할까요? 선수 체크리스트에서도 사라져요.','삭제',()=>{Store.del('homework',v);S.hwEdit=null;toast('숙제를 삭제했어요.');render();},true);break;
     case'newlesson':S.mediaMsg='';S.lesson=newLesson();S.newKeys=[];S.lessonSnap=JSON.stringify(S.lesson);render();try{window.scrollTo(0,0);}catch(e){}break;
     case'editlesson':{const src=Store.data.lessons[v];if(!src)break;const o=JSON.parse(JSON.stringify(src));o.id=v;o.topics=o.topics||[];o.media=o.media||[];o.coachId=o.coachId||'';o.coachName=o.coachName||'';S.lesson=o;S.newKeys=[];S.lessonSnap=JSON.stringify(o);render();try{window.scrollTo(0,0);}catch(e){}break;}
     case'closelesson':
       if(JSON.stringify(S.lesson)===S.lessonSnap&&!S.newKeys.length){S.lesson=null;render();break;}
       ask('저장하지 않은 내용은 사라져요. 닫을까요?','닫기',()=>{dropNewMedia();S.lesson=null;render();},true);break;
+    case'newclesson':{if(!playersOf(ME).length){toast('연결된 선수가 없어요.');break;}S.mediaMsg='';S.lesson=newCoachLesson(S.lessonPlayer&&S.lessonPlayer!=='all'?S.lessonPlayer:'');S.newKeys=[];S.lessonSnap=JSON.stringify(S.lesson);render();try{window.scrollTo(0,0);}catch(e){}break;}
+    case'lplayer':if(S.lesson.media.length&&S.lesson.playerId!==v){toast('사진·영상을 올린 뒤에는 선수를 바꿀 수 없어요.');break;}S.lesson.playerId=v;render();break;
     case'lcoach':S.lesson.coachId=v;render();break;
     case'ltopic':{const t=S.lesson.topics,i=t.indexOf(v);if(i>=0)t.splice(i,1);else t.push(v);render();break;}
     case'mdel':{const m=S.lesson.media.splice(+v,1)[0];if(m&&S.newKeys.includes(m.key)){S.newKeys=S.newKeys.filter(k=>k!==m.key);API.req('/media/'+m.key,{method:'DELETE'}).catch(()=>{});}render();break;}
@@ -1508,9 +1602,10 @@ document.addEventListener('click',async e=>{
     case'savelesson':{
       const l=S.lesson;
       if(S.uploading){toast('사진·영상을 올리는 중이에요. 잠시만 기다려 주세요.');break;}
+      if(l.author==='coach'&&!l.playerId){toast('선수를 골라 주세요.');break;}
       if(!l.content.trim()&&!l.homework.trim()&&!l.media.length){toast('배운 내용이나 숙제, 사진·영상 중 하나는 남겨 주세요.');break;}
       const o=JSON.parse(JSON.stringify(l)),id=o.id;delete o.id;const existed=!!Store.data.lessons[id];
-      Store.set('lessons',id,o);S.lesson=null;S.newKeys=[];toast(existed?'레슨을 수정했어요.':'레슨을 기록했어요.'+(o.coachId?' 코치에게도 보여요.':''));render();break;}
+      Store.set('lessons',id,o);S.lesson=null;S.newKeys=[];toast(existed?'레슨을 수정했어요.':'레슨을 기록했어요.'+(o.author==='coach'?' 선수에게 보여요.':o.coachId?' 코치에게도 보여요.':''));render();break;}
     case'dellesson':ask('이 레슨 기록을 삭제할까요? 사진·영상도 함께 지워져요.','삭제',()=>{Store.del('lessons',v);S.lesson=null;toast('레슨을 삭제했어요.');render();},true);break;
     case'newpcode':try{await API.req('/pcode',{method:'POST'});await Store.load();toast('학부모 초대 코드를 만들었어요.');}catch(err){toast(err.message);}render();break;
     case'pjoin':{const c=(S.drafts.pjoin||'').trim().toUpperCase().replace(/\s/g,'');if(!c){toast('자녀에게 받은 코드를 입력하세요.');break;}
@@ -1558,8 +1653,8 @@ document.addEventListener('click',async e=>{
     case'adddrill':S.dd[w].push({id:'d'+uid(),name:'',target:''});render();break;
     case'deldrill':S.dd[w].splice(+v,1);render();break;
     case'savedrills':{
-      const list=S.dd[w].filter(d=>d.name.trim()).map(d=>({id:d.id,name:d.name.trim(),target:(d.target||'').trim(),desc:d.desc||''}));
-      await Store.set('drills',w==='me'?ME:'c_'+ME,{list,updatedAt:Date.now()});delete S.dd[w];toast('연습 항목을 저장했어요.');render();break;}
+      const list=S.dd[w].filter(d=>d.name.trim()||(w==='me'&&SOLO())).map(d=>({id:d.id,name:d.name.trim(),target:(d.target||'').trim(),desc:d.desc||''}));
+      await Store.set('drills',w==='me'?(SOLO()?'s_'+ME:ME):'c_'+ME,{list,updatedAt:Date.now()});delete S.dd[w];toast('연습 항목을 저장했어요.');render();break;}
   }
 });
 document.addEventListener('input',e=>{
@@ -1574,6 +1669,9 @@ document.addEventListener('input',e=>{
   else if(f==='l-hw')S.lesson.homework=v;
   else if(f==='l-date'&&v)S.lesson.date=v;
   else if(f==='l-cname')S.lesson.coachName=v;
+  else if(f==='hw-text')S.hwEdit.homework=v;
+  else if(f==='hw-memo')S.hwEdit.memo=v;
+  else if(f==='hw-date'&&v)S.hwEdit.date=v;
   else if(f==='ag-gname')S.ag.gname=v;
   else if(f==='ag-gphone')S.ag.gphone=v;
   else if(f==='mfile')return;
@@ -1589,7 +1687,7 @@ document.addEventListener('input',e=>{
     if(!USER)b.classList.toggle('ready',authReady());
     else b.classList.toggle('ready',!!v.trim());}}
 });
-document.addEventListener('change',e=>{const el=e.target;if(el.dataset&&el.dataset.field==='mfile'){const f=el.files&&el.files[0];el.value='';if(f)addMedia(f);return;}if(el.dataset&&el.dataset.field==='l-date'&&el.value&&S.lesson)S.lesson.date=el.value;if(el.dataset&&el.dataset.field==='r-date'&&el.value&&S.round)S.round.date=el.value;});
+document.addEventListener('change',e=>{const el=e.target;if(el.dataset&&el.dataset.field==='hw-date'&&el.value&&S.hwEdit)S.hwEdit.date=el.value;if(el.dataset&&el.dataset.field==='mfile'){const f=el.files&&el.files[0];el.value='';if(f)addMedia(f);return;}if(el.dataset&&el.dataset.field==='l-date'&&el.value&&S.lesson)S.lesson.date=el.value;if(el.dataset&&el.dataset.field==='r-date'&&el.value&&S.round)S.round.date=el.value;});
 document.addEventListener('keydown',e=>{
   if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('div[role=button][data-act]')){e.preventDefault();e.target.click();return;}
   if(e.key==='Enter'&&!USER&&e.target.closest&&e.target.closest('.onb')){const b=document.querySelector('[data-act=auth]');if(b)b.click();return;}
