@@ -1009,7 +1009,7 @@ function vReport(){
   }
   if(coach){
     const ps=playersOf(ME);
-    if(!ps.length)return '<div class="empty" style="margin-top:12px">연결된 선수가 없어요. 선수 탭에서 초대 코드를 공유하세요.</div>';
+    if(!ps.length)return '<div class="empty" style="margin-top:12px">연결된 선수가 없어요. 아래 초대 코드를 선수에게 알려주세요.</div>'+codeCard();
     h+='<div class="chips" style="margin-top:6px">'+ps.map(x=>'<button class="'+(x===p?'on':'')+'" data-act="rp" data-v="'+esc(x)+'">'+esc(pName(x))+'</button>').join('')+'</div>';
   }
   const C=compute(p),R=C.R;
@@ -1152,7 +1152,7 @@ function vInbox(){
   const ps=playersOf(ME),req=requestsFor(ME);
   let h='';
   if(req.length)h+='<div class="fb" style="border-left-color:var(--green);margin-top:6px"><div class="who2" style="color:var(--green)">연결 요청 '+req.length+'건</div><p>선수 탭에서 승인하면 기록이 여기로 들어와요.</p><button class="btn sm" data-act="tab" data-v="players" style="margin-top:10px">요청 보기</button></div>';
-  if(!ps.length)return h+'<div class="empty" style="margin-top:12px">아직 연결된 선수가 없어요. 선수 탭에서 내 초대 코드를 선수에게 알려주세요.</div>';
+  if(!ps.length)return h+'<div class="empty" style="margin-top:12px">아직 연결된 선수가 없어요. 아래 초대 코드를 선수에게 알려주세요.</div>'+codeCard();
   let all=inboxItems();
   if(S.inboxPlayer!=='all')all=all.filter(i=>i.p===S.inboxPlayer);
   const pendingN=all.filter(i=>!i.mine).length;
@@ -1195,9 +1195,13 @@ function drillEditor(w,title,note){
     (L.length?L.map((d,i)=>'<div class="setrow"><input type="text" data-field="dn" data-w="'+w+'" data-i="'+i+'" value="'+esc(d.name)+'" placeholder="항목 이름" aria-label="항목 이름"><input type="text" data-field="dt" data-w="'+w+'" data-i="'+i+'" value="'+esc(d.target||'')+'" placeholder="목표" aria-label="목표"><button class="iconbtn" data-act="deldrill" data-w="'+w+'" data-v="'+i+'" aria-label="항목 삭제">'+I.x+'</button></div>').join(''):'<p class="muted" style="font-size:14px;margin:4px 4px 8px">항목이 없어요.</p>')+
     '<button class="btn ghost" data-act="adddrill" data-w="'+w+'" style="margin-top:6px">항목 추가</button></div><button class="btn" data-act="savedrills" data-w="'+w+'">저장</button>';
 }
+function myCode(){const me=prof(ME);return me&&me.code&&Store.data.codes[me.code]&&Store.data.codes[me.code].coachId===ME?me.code:null;}
+function codeCard(){
+  const code=myCode();
+  return '<h2 style="margin-top:8px">내 초대 코드</h2><div class="card codebox">'+(code?'<div class="code num">'+esc(code)+'</div><p>선수가 내 정보 탭의 코치 연결에 이 코드를 입력하면 연결 요청이 와요.</p><div style="display:flex;gap:8px;justify-content:center;margin-top:14px"><button class="btn sm" data-act="sharecode" style="margin:0">코드 보내기</button><button class="btn ghost sm" data-act="newcode" style="margin:0">새 코드로 바꾸기</button></div>':'<p style="margin:0 0 12px">초대 코드를 만들어 선수에게 알려주면 선수와 연결돼요.</p><button class="btn" data-act="newcode" style="margin:0">초대 코드 만들기</button>')+'</div>';
+}
 function vPlayers(){
-  const me=prof(ME),code=me&&me.code&&Store.data.codes[me.code]&&Store.data.codes[me.code].coachId===ME?me.code:null;
-  let h='<h2 style="margin-top:8px">내 초대 코드</h2><div class="card codebox">'+(code?'<div class="code num">'+esc(code)+'</div><p>선수가 내 정보 탭의 코치 연결에 이 코드를 입력하면 연결 요청이 와요.</p><button class="btn ghost sm" data-act="newcode" style="margin:14px auto 0">새 코드로 바꾸기</button>':'<button class="btn" data-act="newcode" style="margin:0">초대 코드 만들기</button>')+'</div>';
+  let h=codeCard();
   const req=requestsFor(ME);
   if(req.length)h+='<h2>연결 요청 <small>'+req.length+'건</small></h2><div class="card" style="padding:4px 16px">'+req.map(l=>'<div class="prow"><span>'+esc(pName(l.playerId))+'</span><span style="display:flex;gap:6px"><button class="rbtn del" data-act="unlink" data-v="'+esc(l.id)+'">거절</button><button class="rbtn" data-act="approve" data-v="'+esc(l.id)+'" style="background:var(--ink);color:var(--on-ink);border-color:var(--ink)">승인</button></span></div>').join('')+'</div>';
   const ps=links().filter(l=>l.coachId===ME&&l.status==='active'&&prof(l.playerId));
@@ -1252,7 +1256,7 @@ function vLessons(){
   const mon=today().slice(0,7);
   if(S.mode==='coach'){
     const ps=playersOf(ME);
-    if(!ps.length)return '<div class="empty" style="margin-top:12px">연결된 선수가 없어요. 선수 탭에서 초대 코드를 공유하세요.</div>';
+    if(!ps.length)return '<div class="empty" style="margin-top:12px">연결된 선수가 없어요. 아래 초대 코드를 선수에게 알려주세요.</div>'+codeCard();
     let list=allLessons().filter(l=>ps.includes(l.playerId)&&l.coachId===ME&&l.author!=='coach');
     let mine=SOLO()?allLessons().filter(l=>ps.includes(l.playerId)&&l.coachId===ME&&l.author==='coach'):[];
     let hws=allHw().filter(x=>x.coachId===ME&&ps.includes(x.playerId));
@@ -1593,6 +1597,10 @@ document.addEventListener('click',async e=>{
       if(JSON.stringify(S.lesson)===S.lessonSnap&&!S.newKeys.length){S.lesson=null;render();break;}
       ask('저장하지 않은 내용은 사라져요. 닫을까요?','닫기',()=>{dropNewMedia();S.lesson=null;render();},true);break;
     case'newclesson':{if(!playersOf(ME).length){toast('연결된 선수가 없어요.');break;}S.mediaMsg='';S.lesson=newCoachLesson(S.lessonPlayer&&S.lessonPlayer!=='all'?S.lessonPlayer:'');S.newKeys=[];S.lessonSnap=JSON.stringify(S.lesson);render();try{window.scrollTo(0,0);}catch(e){}break;}
+    case'sharecode':{const c=myCode();if(!c)break;const txt='FeedUp 코치 초대 코드: '+c+'\n앱에서 내 정보 → 코치 연결에 입력해 주세요.\n'+location.origin;
+      if(navigator.share){navigator.share({text:txt}).catch(()=>{});}
+      else if(navigator.clipboard){navigator.clipboard.writeText(txt).then(()=>toast('초대 코드를 복사했어요. 선수에게 붙여넣어 보내세요.'),()=>toast('코드: '+c));}
+      else toast('코드: '+c);break;}
     case'lplayer':if(S.lesson.media.length&&S.lesson.playerId!==v){toast('사진·영상을 올린 뒤에는 선수를 바꿀 수 없어요.');break;}S.lesson.playerId=v;render();break;
     case'lcoach':S.lesson.coachId=v;render();break;
     case'ltopic':{const t=S.lesson.topics,i=t.indexOf(v);if(i>=0)t.splice(i,1);else t.push(v);render();break;}
