@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>FeedUp 관리자</title>
+<link rel="icon" type="image/png" href="/icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@800;900&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F5F7;--card:#fff;--ink:#111418;--muted:#667085;--line:#E4E7EC;--blue:#1F5EFF;--blue2:#EAF0FF;--red:#E0322A;--red2:#FDECEA;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Noto Sans KR',system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;font-size:14.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0}
+:focus-visible{outline:2.5px solid var(--blue);outline-offset:2px;border-radius:6px}
+.num{font-family:'Barlow Condensed','Arial Narrow',sans-serif;font-variant-numeric:tabular-nums}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:#fff;border-bottom:1px solid var(--line)}
+header .in{max-width:1180px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:10px}
+.logo{font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-weight:900;letter-spacing:-.055em;font-size:22px;color:var(--ink);text-decoration:none}
+.tag{font-family:'Inter',sans-serif;font-weight:800;font-size:11px;letter-spacing:.12em;background:var(--ink);color:#fff;border-radius:5px;padding:3px 7px}
+.sp{flex:1}
+.hbtn{height:36px;padding:0 14px;border-radius:9px;border:1px solid var(--line);background:#fff;font-weight:700;font-size:13px;display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--ink)}
+.hbtn.dark{background:var(--ink);color:#fff;border-color:var(--ink)}
+main{max-width:1180px;margin:0 auto;padding:20px 20px 60px}
+h1{font-size:26px;font-weight:900;letter-spacing:-.03em;margin:4px 0 2px}
+.sub{color:var(--muted);font-size:13px;margin:0 0 18px}
+h2{font-size:16px;font-weight:900;margin:28px 0 10px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+h2 small{font-weight:500;color:var(--muted);font-size:12.5px}
+.grid{display:grid;gap:10px}
+.kpis{grid-template-columns:repeat(6,1fr)}
+@media (max-width:960px){.kpis{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:520px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+.kpi .l{font-size:12.5px;color:var(--muted);font-weight:700}
+.kpi .v{font-size:44px;font-weight:800;line-height:1;margin-top:8px}
+.kpi .d{font-size:12px;color:var(--muted);margin-top:6px}
+.kpi.hl{background:var(--ink);border-color:var(--ink);color:#fff}
+.kpi.hl .l,.kpi.hl .d{color:rgba(255,255,255,.65)}
+.two{grid-template-columns:1.6fr 1fr;align-items:start}
+@media (max-width:860px){.two{grid-template-columns:1fr}}
+.bars{display:flex;align-items:flex-end;gap:3px;height:150px;margin-top:10px}
+.bars div{flex:1;height:100%;position:relative;background:var(--blue2);border-radius:3px 3px 0 0}
+.bars div b{position:absolute;left:0;right:0;bottom:0;background:var(--blue);border-radius:3px 3px 0 0;min-height:0}
+.bars div span{position:absolute;left:50%;transform:translateX(-50%);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;color:var(--ink)}
+.blbl{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-top:6px;font-family:'Barlow Condensed',sans-serif;font-weight:600}
+.stat{display:flex;justify-content:space-between;align-items:baseline;padding:9px 0;border-top:1px solid var(--line)}
+.stat:first-of-type{border-top:0}
+.stat b{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:800}
+.stat small{color:var(--muted);font-size:12px;margin-left:4px}
+.tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.tools input{flex:1;min-width:200px;height:40px;border:1px solid var(--line);border-radius:10px;padding:0 12px;background:#fff}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{height:34px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:#fff;font-weight:700;font-size:13px}
+.chips button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.chips button .num{font-size:15px;margin-left:3px}
+select{height:34px;border:1.5px solid var(--line);border-radius:999px;padding:0 10px;background:#fff;font-weight:700;font-size:13px}
+.tw{overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:14px}
+table{width:100%;border-collapse:collapse;min-width:860px}
+th,td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;font-size:13.5px;white-space:nowrap}
+th{font-size:12px;color:var(--muted);font-weight:700;background:#FAFAFB;position:sticky;top:0}
+tr:last-child td{border-bottom:0}
+td .nm{font-weight:800}
+td .em{font-size:12px;color:var(--muted)}
+.r{display:inline-block;font-size:11.5px;font-weight:800;border-radius:5px;padding:2px 7px;margin-right:4px}
+.r.player{background:var(--blue2);color:var(--blue)}
+.r.coach{background:var(--ink);color:#fff}
+.r.parent{background:#EEF1F5;color:var(--ink)}
+.r.kid{background:var(--red2);color:var(--red)}
+.r.warn{background:#FFF4E5;color:#B54708}
+td.n{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;text-align:right}
+th.n{text-align:right}
+.muted{color:var(--muted)}
+.state{min-height:60vh;display:grid;place-items:center;text-align:center;padding:24px}
+.state h1{margin-bottom:8px}
+.state p{color:var(--muted);margin:0 0 16px}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.foot{font-size:12px;color:var(--muted);margin-top:10px}
+</style>
+</head>
+<body>
+<header><div class="in"><a class="logo" href="/">FeedUp.</a><span class="tag">ADMIN</span><span class="sp"></span><button class="hbtn" id="reload" type="button">새로고침</button><a class="hbtn dark" href="/">앱으로</a></div></header>
+<main id="main"><div class="state"><p>불러오는 중…</p></div></main>
+<script>
+(function(){
+'use strict';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad=n=>String(n).padStart(2,'0');
+const ymd=t=>{const d=new Date(t);return d.getFullYear()+'.'+pad(d.getMonth()+1)+'.'+pad(d.getDate());};
+const dkey=t=>{const d=new Date(t);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());};
+const ago=t=>{if(!t)return '<span class="muted">없음</span>';const m=Math.floor((Date.now()-t)/60000);if(m<60)return m+'분 전';const h=Math.floor(m/60);if(h<24)return h+'시간 전';const d=Math.floor(h/24);return d<31?d+'일 전':ymd(t);};
+const RL={player:'선수',coach:'코치',parent:'학부모'};
+let D=null;const st={q:'',role:'all',sort:'created'};
+
+async function load(){
+  $('#main').innerHTML='<div class="state"><p>불러오는 중…</p></div>';
+  let r;
+  try{r=await fetch('/api/admin/overview',{credentials:'same-origin'});}catch(e){return msg('연결할 수 없어요','인터넷 연결을 확인하고 새로고침해 주세요.');}
+  if(r.status===401)return msg('로그인이 필요해요','앱에서 관리자 계정으로 로그인한 뒤 이 페이지를 다시 열어 주세요.','<a class="hbtn dark" href="/">앱에서 로그인하기</a>');
+  if(r.status===403)return msg('관리자만 볼 수 있어요','이 계정은 관리자로 등록되어 있지 않아요. Cloudflare 설정의 ADMIN_EMAILS에 이메일을 추가해 주세요.');
+  if(!r.ok)return msg('불러오지 못했어요','잠시 뒤 새로고침해 주세요. (오류 '+r.status+')');
+  D=await r.json();render();
+}
+function msg(t,p,extra){$('#main').innerHTML='<div class="state"><div><h1>'+esc(t)+'</h1><p>'+esc(p)+'</p>'+(extra||'')+'</div></div>';}
+
+function render(){
+  const T=D.totals,M=D.members;
+  const days=[];const today=new Date();today.setHours(0,0,0,0);
+  for(let i=29;i>=0;i--){const d=new Date(today);d.setDate(d.getDate()-i);days.push(dkey(d));}
+  const byDay={};M.forEach(m=>{const k=dkey(m.created);byDay[k]=(byDay[k]||0)+1;});
+  const vals=days.map(d=>byDay[d]||0),mx=Math.max(1,...vals),new30=vals.reduce((a,b)=>a+b,0),new7=vals.slice(-7).reduce((a,b)=>a+b,0);
+  let h='<h1>가입 현황</h1><p class="sub">'+ymd(D.now)+' 기준. 한 회원이 선수와 코치, 학부모를 함께 할 수 있어 역할별 합계는 전체 회원 수보다 클 수 있어요.</p>';
+  h+='<div class="grid kpis">'+
+    kpi('전체 회원',T.users,'최근 7일 +'+new7+'명',true)+kpi('선수',T.players,'')+kpi('코치',T.coaches,'')+kpi('학부모',T.parents,'')+
+    kpi('최근 7일 활동',T.active7,'기록하거나 피드백한 회원')+kpi('만 14세 미만',T.under14,'보호자 동의 가입')+'</div>';
+  h+='<div class="grid two" style="margin-top:10px"><div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>최근 30일 신규 가입</b><span class="muted" style="font-size:13px">합계 <b class="num" style="font-size:20px;color:var(--ink)">'+new30+'</b>명</span></div>'+
+    '<div class="bars">'+vals.map((v,i)=>'<div title="'+days[i]+' '+v+'명"><b style="height:'+Math.round(v/mx*100)+'%"></b>'+(v?'<span style="bottom:calc('+Math.round(v/mx*100)+'% + 2px)">'+v+'</span>':'')+'</div>').join('')+'</div>'+
+    '<div class="blbl"><span>'+days[0].slice(5).replace('-','.')+'</span><span>'+days[29].slice(5).replace('-','.')+'</span></div></div>'+
+    '<div class="card"><b>연결과 기록</b><div style="margin-top:6px">'+
+      stat('코치와 선수 연결',T.linksActive,T.linksPending?'승인 대기 '+T.linksPending:'')+stat('학부모 연결',T.parentLinks,'')+
+      stat('연습 체크 기록',T.logs,'일')+stat('레슨 기록',T.lessons,'')+stat('라운드 기록',T.rounds,'시합 '+T.matches)+
+      stat('코치 피드백',T.feedback,'')+stat('사진·영상',T.media,'')+'</div></div></div>';
+  // members
+  const cnt={all:M.length,player:0,coach:0,parent:0,kid:0};
+  M.forEach(m=>{m.roles.forEach(r=>cnt[r]++);if(m.under14)cnt.kid++;});
+  h+='<h2>회원 목록 <small>최근 가입 순</small></h2>';
+  h+='<div class="tools"><input id="q" type="search" placeholder="이름 또는 이메일 검색" value="'+esc(st.q)+'" aria-label="회원 검색">'+
+    '<div class="chips">'+[['all','전체'],['player','선수'],['coach','코치'],['parent','학부모'],['kid','14세 미만']].map(x=>'<button type="button" data-role="'+x[0]+'" class="'+(st.role===x[0]?'on':'')+'">'+x[1]+'<span class="num">'+cnt[x[0]]+'</span></button>').join('')+'</div>'+
+    '<select id="sort" aria-label="정렬"><option value="created"'+(st.sort==='created'?' selected':'')+'>가입일 순</option><option value="last"'+(st.sort==='last'?' selected':'')+'>최근 활동 순</option><option value="name"'+(st.sort==='name'?' selected':'')+'>이름 순</option></select>'+
+    '<button class="hbtn" id="csv" type="button">CSV 내려받기</button></div>';
+  h+='<div class="tw" id="tbl">'+table()+'</div><p class="foot">이메일과 기록은 서비스 운영 목적에만 사용해 주세요. 보호자 연락처는 이 화면에 표시하지 않아요.</p>';
+  $('#main').innerHTML=h;
+  $('#q').addEventListener('input',e=>{st.q=e.target.value;$('#tbl').innerHTML=table();});
+  document.querySelectorAll('[data-role]').forEach(b=>b.addEventListener('click',()=>{st.role=b.dataset.role;render();}));
+  $('#sort').addEventListener('change',e=>{st.sort=e.target.value;$('#tbl').innerHTML=table();});
+  $('#csv').addEventListener('click',csv);
+}
+function kpi(l,v,d,hl){return '<div class="card kpi'+(hl?' hl':'')+'"><div class="l">'+l+'</div><div class="v num">'+v+'</div>'+(d?'<div class="d">'+esc(d)+'</div>':'')+'</div>';}
+function stat(l,v,s){return '<div class="stat"><span>'+l+'</span><span><b>'+v+'</b>'+(s?'<small>'+esc(s)+'</small>':'')+'</span></div>';}
+function rows(){
+  const q=st.q.trim().toLowerCase();
+  let L=D.members.filter(m=>(st.role==='all'||(st.role==='kid'?m.under14:m.roles.includes(st.role)))&&(!q||m.name.toLowerCase().includes(q)||m.email.toLowerCase().includes(q)));
+  if(st.sort==='last')L=L.slice().sort((a,b)=>(b.last||0)-(a.last||0));
+  else if(st.sort==='name')L=L.slice().sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+  return L;
+}
+function table(){
+  const L=rows();
+  if(!L.length)return '<div class="empty">조건에 맞는 회원이 없어요.</div>';
+  return '<table><thead><tr><th>회원</th><th>역할</th><th>가입일</th><th>최근 활동</th><th class="n">담당 선수</th><th class="n">연결 코치</th><th class="n">학부모</th><th class="n">연습</th><th class="n">레슨</th><th class="n">라운드</th><th class="n">피드백</th></tr></thead><tbody>'+
+    L.map(m=>'<tr><td><div class="nm">'+esc(m.name)+'</div><div class="em">'+esc(m.email)+'</div></td>'+
+      '<td>'+m.roles.map(r=>'<span class="r '+r+'">'+RL[r]+'</span>').join('')+(m.under14?'<span class="r kid">14세 미만</span>':'')+(m.consent?'':'<span class="r warn">약관 미동의</span>')+'</td>'+
+      '<td>'+ymd(m.created)+'</td><td>'+ago(m.last)+'</td>'+
+      '<td class="n">'+(m.roles.includes('coach')?m.players+(m.pending?' <span class="muted" style="font-size:12px">+'+m.pending+'</span>':''):'–')+'</td>'+
+      '<td class="n">'+(m.coaches||'–')+'</td><td class="n">'+(m.parents||m.kids||'–')+'</td>'+
+      '<td class="n">'+(m.logs||'–')+'</td><td class="n">'+(m.lessons||'–')+'</td><td class="n">'+(m.rounds||'–')+'</td><td class="n">'+(m.feedback||'–')+'</td></tr>').join('')+'</tbody></table>';
+}
+function csv(){
+  const L=rows(),q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+  const head=['이름','이메일','역할','14세 미만','약관 동의','가입일','최근 활동','담당 선수','승인 대기','연결 코치','자녀 수','학부모 수','연습','레슨','라운드','피드백'];
+  const lines=[head.map(q).join(',')].concat(L.map(m=>[m.name,m.email,m.roles.map(r=>RL[r]).join('/'),m.under14?'Y':'',m.consent?'Y':'N',ymd(m.created),m.last?ymd(m.last):'',m.players,m.pending,m.coaches,m.kids,m.parents,m.logs,m.lessons,m.rounds,m.feedback].map(q).join(',')));
+  const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='feedup_members_'+dkey(Date.now())+'.csv';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
+}
+$('#reload').addEventListener('click',load);
+load();
+})();
+</script>
+</body>
+</html>

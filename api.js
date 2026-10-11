@@ -140,7 +140,7 @@ async function logout(req, env) {
 
 /* ---------------- state (what this user may see) ---------------- */
 async function state(env, ME) {
-  const out = { profiles: {}, links: {}, codes: {}, drills: {}, logs: {}, rounds: {}, feedback: {}, reports: {}, lessons: {}, parents: {}, pcodes: {}, consents: {} };
+  const out = { profiles: {}, links: {}, codes: {}, drills: {}, logs: {}, rounds: {}, feedback: {}, reports: {}, lessons: {}, parents: {}, pcodes: {}, consents: {}, homework: {} };
   toMap(await rowsIn(env, 'consents', 'owner', [ME]), out.consents);
   const mine = [...(await rowsIn(env, 'links', 'coach', [ME])), ...(await rowsIn(env, 'links', 'player', [ME]))];
   toMap(mine, out.links);
@@ -163,7 +163,7 @@ async function state(env, ME) {
   toMap(await rowsIn(env, 'codes', 'coach', [ME]), out.codes);
   const drillCoaches = new Set([ME, ...coaches]);
   Object.values(out.links).forEach((l) => { if (l.status === 'active' && (players.includes(l.playerId) || children.includes(l.playerId))) drillCoaches.add(l.coachId); });
-  toMap(await rowsIn(env, 'drills', 'id', [ME, ...players, ...children, ...[...drillCoaches].map((c) => 'c_' + c)]), out.drills);
+  toMap(await rowsIn(env, 'drills', 'id', [ME, ...players, ...children, ...[ME, ...players, ...children].map((x) => 's_' + x), ...[...drillCoaches].map((c) => 'c_' + c)]), out.drills);
   const scope = [ME, ...players, ...children];
   toMap(await rowsIn(env, 'logs', 'player', scope), out.logs);
   toMap(await rowsIn(env, 'rounds', 'player', scope), out.rounds);
@@ -173,18 +173,20 @@ async function state(env, ME) {
   toMap(await rowsIn(env, 'feedback', 'player', shared), out.feedback);
   toMap(await rowsIn(env, 'feedback', 'player', children), out.feedback);
   toMap(await rowsIn(env, 'lessons', 'coach', [ME]), out.lessons);
+  toMap(await rowsIn(env, 'homework', 'coach', [ME]), out.homework);
+  toMap(await rowsIn(env, 'homework', 'player', [ME, ...children]), out.homework);
   toMap(await rowsIn(env, 'lessons', 'player', [ME, ...children, ...shared]), out.lessons);
   toMap(await rowsIn(env, 'reports', 'owner', [ME]), out.reports);
   return out;
 }
 
 /* ---------------- writes with permission checks ---------------- */
-function cleanDrills(list) {
+function cleanDrills(list, keepEmpty) {
   if (!Array.isArray(list)) return [];
   return list.slice(0, 50).map((d) => ({
     id: str(d.id, 40).replace(/[^A-Za-z0-9_-]/g, '') || 'd' + rand(4),
     name: str(d.name, 40), target: str(d.target, 20), desc: str(d.desc, 80),
-  })).filter((d) => d.name);
+  })).filter((d) => keepEmpty || d.name);
 }
 async function write(env, ME, b) {
   const { op, col } = b;
@@ -206,19 +208,21 @@ async function write(env, ME, b) {
       return J({ ok: true });
     }
     case 'drills': {
-      if (id !== ME && id !== 'c_' + ME) return deny();
+      if (id !== ME && id !== 'c_' + ME && id !== 's_' + ME) return deny();
       if (del) { await delDoc(env, col, id); return J({ ok: true }); }
-      await putDoc(env, col, id, { list: cleanDrills(data.list), updatedAt: Date.now() }, { owner: ME });
+      await putDoc(env, col, id, { list: cleanDrills(data.list, id === 's_' + ME), updatedAt: Date.now() }, { owner: ME });
       return J({ ok: true });
     }
     case 'logs': {
-      const date = id.slice(ME.length + 2);
+      let rest = id.slice(ME.length + 2), lspace = 'academy';
+      if (rest.startsWith('s__')) { lspace = 'solo'; rest = rest.slice(3); }
+      const date = rest;
       if (!id.startsWith(ME + '__') || !isDate(date)) return deny();
       if (del) { await delDoc(env, col, id); return J({ ok: true }); }
       const checks = {};
       Object.entries(data.checks || {}).slice(0, 200).forEach(([k, v]) => { if (v) checks[str(k, 120)] = true; });
       await putDoc(env, col, id, {
-        playerId: ME, date, checks, memo: str(data.memo, 3000),
+        playerId: ME, date, space: lspace, checks, memo: str(data.memo, 3000),
         submitted: !!data.submitted, submittedAt: data.submittedAt || null, updatedAt: Date.now(),
       }, { player: ME });
       return J({ ok: true });
@@ -234,11 +238,13 @@ async function write(env, ME, b) {
         putt: Math.max(0, Math.min(9, h.putt == null ? 2 : +h.putt)),
         fw: ['hit', 'L', 'R'].includes(h.fw) ? h.fw : null,
         note: str(h.note, 200),
+        shots: (Array.isArray(h.shots) ? h.shots : []).slice(0, 30).map((m) => str(m, 40)).filter(Boolean),
       }));
       await putDoc(env, col, id, {
         playerId: ME, date: isDate(data.date) ? data.date : new Date().toISOString().slice(0, 10),
         course: str(data.course, 80), holes, misses: (data.misses || []).slice(0, 40).map((m) => str(m, 40)),
         mentalScore: Math.max(0, Math.min(5, Math.round(+data.mentalScore || 0))),
+        space: (data.space === 'solo' ? 'solo' : 'academy'),
         kind: data.kind === 'match' ? 'match' : 'practice',
         match: data.kind === 'match' ? {
           name: str(data.match && data.match.name, 80),
@@ -272,29 +278,59 @@ async function write(env, ME, b) {
       return J({ ok: true });
     }
     case 'lessons': {
+      // 선수가 쓴 레슨(author: player)과 개인 레슨에서 코치가 쓴 레슨(author: coach)을 모두 받아요. 쓴 사람만 고치고 지울 수 있어요.
       if (!/^l[a-z0-9]{4,40}$/.test(id)) return deny();
       const cur = await getDoc(env, col, id);
-      if (cur && cur.playerId !== ME) return deny();
+      const byCoach = cur ? cur.author === 'coach' : data.author === 'coach';
+      if (cur) {
+        if (byCoach ? cur.coachId !== ME : cur.playerId !== ME) return deny();
+      }
       if (del) {
         if (!cur) return J({ ok: true });
         await removeMedia(env, (cur.media || []).map((m) => m.key));
         await delDoc(env, col, id); return J({ ok: true });
       }
-      const coachId = str(data.coachId, 60);
-      if (coachId && !(await isActivePlayer(env, coachId, ME))) return fail('연결된 코치만 고를 수 있어요.', 403);
-      const prefix = 'lessons/' + ME + '/' + id + '/';
+      let playerId, coachId, coachName = '';
+      if (byCoach) {
+        if (data.space !== 'solo') return fail('코치 레슨 기록은 개인 레슨에서만 쓸 수 있어요.', 403);
+        playerId = cur ? cur.playerId : str(data.playerId, 60);
+        if (!(await isActivePlayer(env, ME, playerId))) return fail('연결된 선수에게만 레슨을 기록할 수 있어요.', 403);
+        coachId = ME;
+      } else {
+        playerId = ME;
+        coachId = str(data.coachId, 60);
+        if (coachId && !(await isActivePlayer(env, coachId, ME))) return fail('연결된 코치만 고를 수 있어요.', 403);
+        coachName = coachId ? '' : str(data.coachName, 30);
+      }
+      const prefix = 'lessons/' + playerId + '/' + id + '/';
       const media = (Array.isArray(data.media) ? data.media : [])
         .filter((m) => m && typeof m.key === 'string' && m.key.startsWith(prefix) && !m.key.includes('..') && ['image', 'video'].includes(m.type))
         .slice(0, 6).map((m) => ({ key: m.key, type: m.type }));
       const keep = new Set(media.map((m) => m.key));
       await removeMedia(env, ((cur && cur.media) || []).map((m) => m.key).filter((k) => !keep.has(k)));
       await putDoc(env, col, id, {
-        playerId: ME, coachId: coachId || null, coachName: coachId ? '' : str(data.coachName, 30),
+        playerId, coachId: coachId || null, coachName, author: byCoach ? 'coach' : 'player',
         date: isDate(data.date) ? data.date : new Date().toISOString().slice(0, 10),
         topics: (Array.isArray(data.topics) ? data.topics : []).filter((t) => LESSON_TOPICS.includes(t)),
-        content: str(data.content, 4000), homework: str(data.homework, 1000), media,
+        content: str(data.content, 4000), homework: str(data.homework, 1000), media, space: (data.space === 'solo' ? 'solo' : 'academy'),
         createdAt: (cur && cur.createdAt) || Date.now(), updatedAt: Date.now(),
-      }, { coach: coachId || null, player: ME });
+      }, { coach: coachId || null, player: playerId });
+      return J({ ok: true });
+    }
+    case 'homework': {
+      if (!/^h[a-z0-9]{4,40}$/.test(id)) return deny();
+      const cur = await getDoc(env, col, id);
+      if (cur && cur.coachId !== ME) return deny();
+      if (del) { if (cur) await delDoc(env, col, id); return J({ ok: true }); }
+      const playerId = str(data.playerId, 60);
+      if (!(await isActivePlayer(env, ME, playerId))) return fail('연결된 선수에게만 숙제를 보낼 수 있어요.', 403);
+      const homework = str(data.homework, 1000).trim();
+      if (!homework) return fail('숙제를 한 줄 이상 적어 주세요.');
+      await putDoc(env, col, id, {
+        coachId: ME, playerId, date: isDate(data.date) ? data.date : new Date().toISOString().slice(0, 10),
+        homework, memo: str(data.memo, 1000), space: (data.space === 'solo' ? 'solo' : 'academy'),
+        createdAt: (cur && cur.createdAt) || Date.now(), updatedAt: Date.now(),
+      }, { coach: ME, player: playerId });
       return J({ ok: true });
     }
     case 'parents': {
@@ -365,7 +401,13 @@ async function mediaPut(req, env, ME, url) {
   const lessonId = url.searchParams.get('lesson') || '';
   if (!/^l[a-z0-9]{4,40}$/.test(lessonId)) return fail('레슨 정보가 올바르지 않아요.');
   const cur = await getDoc(env, 'lessons', lessonId);
-  if (cur && cur.playerId !== ME) return fail('권한이 없어요.', 403);
+  const owner = url.searchParams.get('player') || ME;
+  if (owner === ME) {
+    if (cur && (cur.author === 'coach' || cur.playerId !== ME)) return fail('권한이 없어요.', 403);
+  } else {
+    if (!(await isActivePlayer(env, ME, owner))) return fail('권한이 없어요.', 403);
+    if (cur && (cur.author !== 'coach' || cur.coachId !== ME || cur.playerId !== owner)) return fail('권한이 없어요.', 403);
+  }
   const ct = (req.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
   const isImg = !!IMG_TYPES[ct], isVid = !!VID_TYPES[ct];
   if (!isImg && !isVid) return fail('사진(jpg, png) 또는 영상(mp4, mov) 파일만 올릴 수 있어요.');
@@ -373,7 +415,7 @@ async function mediaPut(req, env, ME, url) {
   if (+(req.headers.get('content-length') || 0) > max) return fail(isImg ? '사진 용량이 너무 커요.' : '영상 용량이 너무 커요. 40MB 이하로 올려 주세요.', 413);
   const buf = await req.arrayBuffer();
   if (!buf.byteLength || buf.byteLength > max) return fail('파일 용량을 확인해 주세요.', 413);
-  const key = 'lessons/' + ME + '/' + lessonId + '/' + rand(8) + '.' + (IMG_TYPES[ct] || VID_TYPES[ct]);
+  const key = 'lessons/' + owner + '/' + lessonId + '/' + rand(8) + '.' + (IMG_TYPES[ct] || VID_TYPES[ct]);
   await env.MEDIA.put(key, buf, { httpMetadata: { contentType: ct } });
   return J({ key, type: isImg ? 'image' : 'video' });
 }
@@ -402,7 +444,15 @@ async function mediaGet(req, env, ME, key) {
 }
 async function mediaDelete(env, ME, key) {
   const parts = key.split('/');
-  if (parts.length !== 4 || parts[0] !== 'lessons' || parts[1] !== ME) return fail('권한이 없어요.', 403);
+  if (parts.length !== 4 || parts[0] !== 'lessons' || key.includes('..')) return fail('권한이 없어요.', 403);
+  if (parts[1] !== ME) {
+    if (!(await isActivePlayer(env, ME, parts[1]))) return fail('권한이 없어요.', 403);
+    const l = await getDoc(env, 'lessons', parts[2]);
+    if (l && (l.author !== 'coach' || l.coachId !== ME)) return fail('권한이 없어요.', 403);
+  } else {
+    const l = await getDoc(env, 'lessons', parts[2]);
+    if (l && l.author === 'coach') return fail('권한이 없어요.', 403);
+  }
   await removeMedia(env, [key]);
   return J({ ok: true });
 }
@@ -434,6 +484,72 @@ async function deleteAccount(req, env, user) {
     env.DB.prepare('DELETE FROM users WHERE id=?').bind(user.id),
   ]);
   return J({ ok: true }, 200, { 'set-cookie': sessCookie('', 0) });
+}
+
+/* ---------------- admin ---------------- */
+// 관리자: Cloudflare 런타임 변수 ADMIN_EMAILS 또는 D1의 admins 행으로 지정
+async function isAdmin(env, user) {
+  if (!user) return false;
+  const email = String(user.email || '').trim().toLowerCase();
+  const list = String(env.ADMIN_EMAILS || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+  if (list.includes(email)) return true;
+  const r = await env.DB.prepare("SELECT 1 AS ok FROM docs WHERE col='admins' AND lower(id)=?").bind(email).first();
+  return !!r;
+}
+async function adminOverview(env) {
+  const all = async (q, ...b) => ((await env.DB.prepare(q).bind(...b).all()).results || []);
+  const users = await all('SELECT id,email,created FROM users ORDER BY created DESC');
+  const docs = await all("SELECT col,id,data FROM docs WHERE col IN ('profiles','consents','links','parents')");
+  const P = {}, C = {}, links = [], parents = [];
+  docs.forEach((r) => {
+    const d = JSON.parse(r.data);
+    if (r.col === 'profiles') P[r.id] = d; else if (r.col === 'consents') C[r.id] = d;
+    else if (r.col === 'links') links.push(d); else parents.push(d);
+  });
+  const counts = {};
+  (await all('SELECT col,COUNT(*) AS n FROM docs GROUP BY col')).forEach((r) => { counts[r.col] = r.n; });
+  const matches = (await env.DB.prepare("SELECT COUNT(*) AS n FROM docs WHERE col='rounds' AND json_extract(data,'$.kind')='match'").first()).n;
+  const media = (await env.DB.prepare("SELECT COALESCE(SUM(json_array_length(data,'$.media')),0) AS n FROM docs WHERE col='lessons' AND json_type(data,'$.media')='array'").first()).n;
+  const act = {}, perUser = {};
+  (await all("SELECT player,col,COUNT(*) AS n,MAX(updated) AS last FROM docs WHERE col IN ('logs','rounds','lessons') AND player IS NOT NULL GROUP BY player,col")).forEach((r) => {
+    act[r.player] = Math.max(act[r.player] || 0, r.last);
+    (perUser[r.player] = perUser[r.player] || {})[r.col] = r.n;
+  });
+  const fbBy = {};
+  (await all("SELECT coach,COUNT(*) AS n,MAX(updated) AS last FROM docs WHERE col='feedback' GROUP BY coach")).forEach((r) => {
+    fbBy[r.coach] = r.n; act[r.coach] = Math.max(act[r.coach] || 0, r.last);
+  });
+  const members = users.map((u) => {
+    const me = 'u_' + u.id, p = P[me] || {}, c = C[me];
+    const asCoach = links.filter((l) => l.coachId === me), asPlayer = links.filter((l) => l.playerId === me);
+    const kids = parents.filter((x) => x.parentId === me), myParents = parents.filter((x) => x.playerId === me);
+    const pu = perUser[me] || {};
+    const isCoach = !!p.coach || asCoach.length > 0;
+    const isParent = !!p.parent || kids.length > 0;
+    const isPlayer = asPlayer.length > 0 || myParents.length > 0 || !!(pu.logs || pu.rounds || pu.lessons) || (!isCoach && !isParent);
+    return {
+      name: p.name || '(프로필 없음)', email: u.email, created: u.created, last: act[me] || null,
+      roles: [isPlayer && 'player', isCoach && 'coach', isParent && 'parent'].filter(Boolean),
+      under14: !!(c && c.age14 === false), consent: !!c,
+      players: asCoach.filter((l) => l.status === 'active').length, pending: asCoach.filter((l) => l.status === 'pending').length,
+      coaches: asPlayer.filter((l) => l.status === 'active').length, kids: kids.length, parents: myParents.length,
+      logs: pu.logs || 0, rounds: pu.rounds || 0, lessons: pu.lessons || 0, feedback: fbBy[me] || 0,
+    };
+  });
+  return J({
+    now: Date.now(), members,
+    totals: {
+      users: users.length,
+      players: members.filter((m) => m.roles.includes('player')).length,
+      coaches: members.filter((m) => m.roles.includes('coach')).length,
+      parents: members.filter((m) => m.roles.includes('parent')).length,
+      under14: members.filter((m) => m.under14).length,
+      active7: members.filter((m) => m.last && m.last > Date.now() - 7 * 864e5).length,
+      linksActive: links.filter((l) => l.status === 'active').length, linksPending: links.filter((l) => l.status === 'pending').length,
+      parentLinks: parents.length,
+      logs: counts.logs || 0, lessons: counts.lessons || 0, rounds: counts.rounds || 0, matches, feedback: counts.feedback || 0, media,
+    },
+  });
 }
 
 async function makePcode(env, ME) {
@@ -507,7 +623,8 @@ export async function onRequest({ request: req, env, params }) {
     if (!user) return fail('로그인이 필요해요.', 401);
     const ME = 'u_' + user.id;
 
-    if (path === '/me' && m === 'GET') return J({ user, me: ME });
+    if (path === '/me' && m === 'GET') return J({ user, me: ME, admin: await isAdmin(env, user) });
+    if (path === '/admin/overview' && m === 'GET') return (await isAdmin(env, user)) ? await adminOverview(env) : fail('관리자만 볼 수 있어요.', 403);
     if (path === '/state' && m === 'GET') return J(await state(env, ME));
     if (path === '/docs' && m === 'POST') return await write(env, ME, await body(req));
     if (path === '/code' && m === 'POST') return await makeCode(env, ME);
