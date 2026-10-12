@@ -627,6 +627,12 @@ async function ai(env, userId, b) {
 }
 
 /* ---------------- router ---------------- */
+// 관리자 전용 페이지(/pt 미리보기 등)에서 쓰는 확인 함수
+export async function adminUser(req, env) {
+  if (!env.DB) return null;
+  const user = await currentUser(req, env);
+  return user && (await isAdmin(env, user)) ? user : null;
+}
 export async function onRequest({ request: req, env, params }) {
   const path = '/' + [].concat(params.path || []).join('/');
   const m = req.method;
