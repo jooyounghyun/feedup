@@ -424,6 +424,11 @@ label.mitem{cursor:pointer;border:1.5px dashed var(--line);background:var(--card
 .spopt .d{display:block;font-size:13px;color:#8E8E93;margin-top:4px;line-height:1.5}
 .spopt .tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}
 .spopt .tags i{font-style:normal;font-size:11.5px;font-weight:700;background:#F2F4F7;border-radius:5px;padding:2px 7px;color:#0B0B0C}
+.spsel{display:grid;gap:8px;margin-top:8px}
+.spopt.sm{padding:12px 14px;margin:0}
+.spopt.sm .t{font-size:15.5px}
+.spopt.sm .d{font-size:12.5px;margin-top:2px}
+.spopt.on{border-color:#0B0B0C;box-shadow:inset 0 0 0 1px #0B0B0C}
 .spopt .ar{position:absolute;right:14px;top:50%;transform:translateY(-50%);color:#8E8E93}
 .chipk.sp{background:#1F5EFF}
 .field.sp{background:var(--green)}
@@ -608,7 +613,7 @@ const S={
   mode:lsGet('sn_mode','player'),tab:null,date:today(),period:'week',anchor:today(),
   reportPlayer:null,inboxFilter:'pending',inboxPlayer:'all',
   round:null,roundRO:false,roundSnap:null,hole:0,
-  space:lsGet('fu_space',null),hwEdit:null,hwSnap:null,
+  space:null,hwEdit:null,hwSnap:null,
   lesson:null,lessonSnap:null,mediaMsg:'',upMsg:'',uploading:0,newKeys:[],viewer:null,rkind:'all',lessonPlayer:'all',child:null,
   loading:true,drafts:{},dd:{},dlg:null,defaultName:'',ag:{},termsView:null,withdraw:false,authMode:'login',authBusy:false,authErr:'',
   ai:{busy:false,key:null,text:''}
@@ -724,10 +729,11 @@ function render(){
   const y=window.scrollY;
   if(S.loading||(USER&&!Store.ready)){app.innerHTML='<div class="loading">기록을 불러오는 중…</div>';return;}
   let html;
-  if(!S.space){html=vSpace();}
-  else if(!USER){html=vAuth();}
+  S.space=USER&&prof(ME)?(prof(ME).space||null):null;
+  if(!USER){html=vAuth();}
   else if(!prof(ME)){html=vOnboard();}
   else if(!(Store.data.consents[ME]&&Store.data.consents[ME].version===TERMS_VERSION)){html=vConsent();}
+  else if(!S.space){html=vSpace();}
   else{
     if(S.mode==='coach'&&!coachEnabled())S.mode='player';
     if(S.mode==='parent'&&!parentEnabled())S.mode='player';
@@ -770,7 +776,7 @@ function tabbar(){
 
 /* ---------- onboarding ---------- */
 function agOk(){const a=S.ag;if(!a.terms||!a.privacy||!a.overseas)return false;if(a.age==='14+')return true;if(a.age==='u14')return !!((a.gname||'').trim()&&(a.gphone||'').replace(/[^0-9]/g,'').length>=9&&a.gok);return false;}
-function authReady(){const su=S.authMode==='signup',D=S.drafts;return !!((D.email||'').trim()&&(D.pw||'').length>=(su?8:1)&&(!su||((D.name||'').trim()&&agOk())));}
+function authReady(){const su=S.authMode==='signup',D=S.drafts;return !!((D.email||'').trim()&&(D.pw||'').length>=(su?8:1)&&(!su||(D.space&&(D.name||'').trim()&&agOk())));}
 function agBlock(){
   const a=S.ag,all=a.terms&&a.privacy&&a.overseas;
   const row=(k,label,view)=>'<div class="agrow"><button class="agck'+(a[k]?' on':'')+'" data-act="ag" data-v="'+k+'" aria-pressed="'+!!a[k]+'"><span class="agbox">'+I.check+'</span>'+label+'</button>'+(view?'<button class="agview" data-act="terms" data-v="'+view+'">보기</button>':'')+'</div>';
@@ -787,21 +793,22 @@ function vConsent(){
     '<div class="foot"><button data-act="logout"><b>로그아웃</b></button></div></div></div>';
 }
 function vSpace(){
-  const card=k=>{const x=SPACES[k];return '<button class="spopt" data-act="setspace" data-v="'+k+'"><span class="t">'+x.label+'</span><span class="d">'+x.desc+'</span><span class="tags">'+x.tags.map(t=>'<i>'+t+'</i>').join('')+'</span><span class="ar">'+I.right.replace('<svg','<svg width="18" height="18"')+'</span></button>';};
-  return '<div class="onb"><div class="in"><h1 class="logo">FeedUp.</h1><p class="spq">어떻게 사용하시나요?</p><p class="hint" style="margin:0 0 16px">나중에 내 정보에서 바꿀 수 있어요.</p>'+card('academy')+card('solo')+'<div class="foot" style="margin-top:18px">한 계정으로 둘 다 쓸 수 있어요</div></div></div>';
+  const card=k=>{const x=SPACES[k];return '<button class="spopt" data-act="pickspace" data-v="'+k+'"><span class="t">'+x.label+'</span><span class="d">'+x.desc+'</span><span class="tags">'+x.tags.map(t=>'<i>'+t+'</i>').join('')+'</span><span class="ar">'+I.right.replace('<svg','<svg width="18" height="18"')+'</span></button>';};
+  return '<div class="onb"><div class="in"><h1 class="logo">FeedUp.</h1><p class="spq">어떻게 사용하시나요?</p><p class="hint" style="margin:0 0 16px">한 번 정하면 계속 이 방식으로 사용해요. 나중에 바꾸려면 문의해 주세요.</p>'+card('academy')+card('solo')+'<div class="foot" style="margin-top:18px"><button data-act="logout"><b>로그아웃</b></button></div></div></div>';
 }
 const spChip=()=>'<span class="chipk'+(SOLO()?' sp':'')+'">'+(S.space?SPACES[S.space].label:FIELD.label)+'</span>';
 function vAuth(){
   const su=S.authMode==='signup',D=S.drafts;
   const ready=authReady();
   return '<div class="onb"><div class="in">'+spChip()+'<h1 class="logo">FeedUp.</h1>'+
+    (su?'<label>사용 방식</label><div class="spsel">'+['academy','solo'].map(k=>'<button type="button" class="spopt sm'+(D.space===k?' on':'')+'" data-act="suspace" data-v="'+k+'" aria-pressed="'+(D.space===k)+'"><span class="t">'+SPACES[k].label+'</span><span class="d">'+SPACES[k].desc+'</span></button>').join('')+'</div><p class="hint" style="margin:2px 0 0">가입 후에는 바꿀 수 없어요. 변경이 필요하면 문의해 주세요.</p><div style="height:22px"></div>':'')+
     (su?'<label for="aname">이름</label><input id="aname" type="text" data-field="name" value="'+esc(D.name||'')+'" placeholder="코치와 선수에게 보여요" autocomplete="name"><div style="height:22px"></div>':'')+
     '<label for="aemail">이메일</label><input id="aemail" type="email" data-field="email" value="'+esc(D.email||'')+'" placeholder="example@email.com" autocomplete="email" inputmode="email">'+
     '<div style="height:22px"></div><label for="apw">비밀번호</label><input id="apw" type="password" data-field="pw" value="'+esc(D.pw||'')+'" placeholder="'+(su?'8자 이상':'비밀번호')+'" autocomplete="'+(su?'new-password':'current-password')+'">'+
     (su?agBlock():'')+
     (S.authErr?'<p class="hint" style="color:#E0322A;font-weight:700">'+esc(S.authErr)+'</p>':'')+
     '<button class="go'+(ready?' ready':'')+'" data-act="auth"'+(S.authBusy?' disabled':'')+'>'+(S.authBusy?'잠시만요…':(su?'가입하고 시작하기':'시작하기'))+'</button>'+
-    '<div class="foot">'+(su?'이미 계정이 있나요? <button data-act="authmode" data-v="login"><b>로그인</b></button>':'처음이신가요? <button data-act="authmode" data-v="signup"><b>회원가입</b></button>')+'</div><div class="foot" style="margin-top:10px;font-size:12.5px"><button data-act="clearspace">'+(SOLO()?'아카데미로 바꾸기':'개인 · 개인 레슨으로 바꾸기')+'</button></div><div class="foot" style="margin-top:14px;font-size:12.5px"><button data-act="terms" data-v="terms">이용약관</button> · <button data-act="terms" data-v="privacy">개인정보 처리방침</button></div></div></div>';
+    '<div class="foot">'+(su?'이미 계정이 있나요? <button data-act="authmode" data-v="login"><b>로그인</b></button>':'처음이신가요? <button data-act="authmode" data-v="signup"><b>회원가입</b></button>')+'</div><div class="foot" style="margin-top:14px;font-size:12.5px"><button data-act="terms" data-v="terms">이용약관</button> · <button data-act="terms" data-v="privacy">개인정보 처리방침</button></div></div></div>';
 }
 function vOnboard(){
   const v=S.drafts.name!=null?S.drafts.name:S.defaultName;
@@ -1009,7 +1016,7 @@ function vReport(){
   }
   if(coach){
     const ps=playersOf(ME);
-    if(!ps.length)return '<div class="empty" style="margin-top:12px">연결된 선수가 없어요. 선수 탭에서 초대 코드를 공유하세요.</div>';
+    if(!ps.length)return '<div class="empty" style="margin-top:12px">연결된 선수가 없어요. 아래 초대 코드를 선수에게 알려주세요.</div>'+codeCard();
     h+='<div class="chips" style="margin-top:6px">'+ps.map(x=>'<button class="'+(x===p?'on':'')+'" data-act="rp" data-v="'+esc(x)+'">'+esc(pName(x))+'</button>').join('')+'</div>';
   }
   const C=compute(p),R=C.R;
@@ -1152,7 +1159,7 @@ function vInbox(){
   const ps=playersOf(ME),req=requestsFor(ME);
   let h='';
   if(req.length)h+='<div class="fb" style="border-left-color:var(--green);margin-top:6px"><div class="who2" style="color:var(--green)">연결 요청 '+req.length+'건</div><p>선수 탭에서 승인하면 기록이 여기로 들어와요.</p><button class="btn sm" data-act="tab" data-v="players" style="margin-top:10px">요청 보기</button></div>';
-  if(!ps.length)return h+'<div class="empty" style="margin-top:12px">아직 연결된 선수가 없어요. 선수 탭에서 내 초대 코드를 선수에게 알려주세요.</div>';
+  if(!ps.length)return h+'<div class="empty" style="margin-top:12px">아직 연결된 선수가 없어요. 아래 초대 코드를 선수에게 알려주세요.</div>'+codeCard();
   let all=inboxItems();
   if(S.inboxPlayer!=='all')all=all.filter(i=>i.p===S.inboxPlayer);
   const pendingN=all.filter(i=>!i.mine).length;
@@ -1195,9 +1202,13 @@ function drillEditor(w,title,note){
     (L.length?L.map((d,i)=>'<div class="setrow"><input type="text" data-field="dn" data-w="'+w+'" data-i="'+i+'" value="'+esc(d.name)+'" placeholder="항목 이름" aria-label="항목 이름"><input type="text" data-field="dt" data-w="'+w+'" data-i="'+i+'" value="'+esc(d.target||'')+'" placeholder="목표" aria-label="목표"><button class="iconbtn" data-act="deldrill" data-w="'+w+'" data-v="'+i+'" aria-label="항목 삭제">'+I.x+'</button></div>').join(''):'<p class="muted" style="font-size:14px;margin:4px 4px 8px">항목이 없어요.</p>')+
     '<button class="btn ghost" data-act="adddrill" data-w="'+w+'" style="margin-top:6px">항목 추가</button></div><button class="btn" data-act="savedrills" data-w="'+w+'">저장</button>';
 }
+function myCode(){const me=prof(ME);return me&&me.code&&Store.data.codes[me.code]&&Store.data.codes[me.code].coachId===ME?me.code:null;}
+function codeCard(){
+  const code=myCode();
+  return '<h2 style="margin-top:8px">내 초대 코드</h2><div class="card codebox">'+(code?'<div class="code num">'+esc(code)+'</div><p>선수가 내 정보 탭의 코치 연결에 이 코드를 입력하면 연결 요청이 와요.</p><div style="display:flex;gap:8px;justify-content:center;margin-top:14px"><button class="btn sm" data-act="sharecode" style="margin:0">코드 보내기</button><button class="btn ghost sm" data-act="newcode" style="margin:0">새 코드로 바꾸기</button></div>':'<p style="margin:0 0 12px">초대 코드를 만들어 선수에게 알려주면 선수와 연결돼요.</p><button class="btn" data-act="newcode" style="margin:0">초대 코드 만들기</button>')+'</div>';
+}
 function vPlayers(){
-  const me=prof(ME),code=me&&me.code&&Store.data.codes[me.code]&&Store.data.codes[me.code].coachId===ME?me.code:null;
-  let h='<h2 style="margin-top:8px">내 초대 코드</h2><div class="card codebox">'+(code?'<div class="code num">'+esc(code)+'</div><p>선수가 내 정보 탭의 코치 연결에 이 코드를 입력하면 연결 요청이 와요.</p><button class="btn ghost sm" data-act="newcode" style="margin:14px auto 0">새 코드로 바꾸기</button>':'<button class="btn" data-act="newcode" style="margin:0">초대 코드 만들기</button>')+'</div>';
+  let h=codeCard();
   const req=requestsFor(ME);
   if(req.length)h+='<h2>연결 요청 <small>'+req.length+'건</small></h2><div class="card" style="padding:4px 16px">'+req.map(l=>'<div class="prow"><span>'+esc(pName(l.playerId))+'</span><span style="display:flex;gap:6px"><button class="rbtn del" data-act="unlink" data-v="'+esc(l.id)+'">거절</button><button class="rbtn" data-act="approve" data-v="'+esc(l.id)+'" style="background:var(--ink);color:var(--on-ink);border-color:var(--ink)">승인</button></span></div>').join('')+'</div>';
   const ps=links().filter(l=>l.coachId===ME&&l.status==='active'&&prof(l.playerId));
@@ -1252,7 +1263,7 @@ function vLessons(){
   const mon=today().slice(0,7);
   if(S.mode==='coach'){
     const ps=playersOf(ME);
-    if(!ps.length)return '<div class="empty" style="margin-top:12px">연결된 선수가 없어요. 선수 탭에서 초대 코드를 공유하세요.</div>';
+    if(!ps.length)return '<div class="empty" style="margin-top:12px">연결된 선수가 없어요. 아래 초대 코드를 선수에게 알려주세요.</div>'+codeCard();
     let list=allLessons().filter(l=>ps.includes(l.playerId)&&l.coachId===ME&&l.author!=='coach');
     let mine=SOLO()?allLessons().filter(l=>ps.includes(l.playerId)&&l.coachId===ME&&l.author==='coach'):[];
     let hws=allHw().filter(x=>x.coachId===ME&&ps.includes(x.playerId));
@@ -1450,8 +1461,7 @@ function vChild(){
 function vMe(){
   const me=prof(ME);
   const nm=S.drafts.myname!=null?S.drafts.myname:me.name;
-  let h='<h2 style="margin-top:8px">사용 방식</h2><div class="tabs2" style="margin:0">'+['academy','solo'].map(k=>'<button class="'+(S.space===k?'on':'')+'" data-act="switchspace" data-v="'+k+'">'+SPACES[k].label+'</button>').join('')+'</div><p class="muted" style="font-size:12.5px;margin:6px 2px 0">아카데미와 개인의 연습 체크, 레슨, 라운드 기록은 따로 보관돼요. 코치·학부모 연결은 함께 써요.</p>';
-  h+='<h2>이름</h2><div class="addline" style="margin-top:0"><input type="text" data-field="myname" value="'+esc(nm)+'"><button class="btn sm" data-act="savename">저장</button></div>';
+  let h='<h2 style="margin-top:8px">이름</h2><div class="addline" style="margin-top:0"><input type="text" data-field="myname" value="'+esc(nm)+'"><button class="btn sm" data-act="savename">저장</button></div>';
   const mine=links().filter(l=>l.playerId===ME&&prof(l.coachId));
   h+='<h2>내 코치 <small>'+mine.filter(l=>l.status==='active').length+'명</small></h2><div class="card" style="padding:4px 16px">'+(mine.length?mine.map(l=>'<div class="prow"><span>'+esc(cName(l.coachId))+' '+(l.status==='pending'?'<span class="badge wait">승인 대기</span>':'')+'</span><button class="rbtn del" data-act="unlink" data-v="'+esc(l.id)+'">'+(l.status==='pending'?'요청 취소':'연결 해제')+'</button></div>').join(''):'<p class="muted" style="font-size:14px">연결된 코치가 없어요.</p>')+'</div>';
   h+='<div class="addline"><input type="text" data-field="joincode" placeholder="코치에게 받은 코드 6자리" value="'+esc(S.drafts.joincode||'')+'" autocapitalize="characters" maxlength="8"><button class="btn sm" data-act="join">연결 요청</button></div>';
@@ -1513,9 +1523,8 @@ document.addEventListener('click',async e=>{
       if(!n){toast('이름을 입력하세요.');break;}
       await Store.set('profiles',ME,{name:n,share:false,field:FIELD.id,createdAt:Date.now()});delete S.drafts.name;render();break;}
     case'authmode':S.authMode=v;S.authErr='';render();break;
-    case'setspace':S.space=v;lsSet('fu_space',v);render();try{window.scrollTo(0,0);}catch(e){}break;
-    case'clearspace':S.space=null;lsSet('fu_space',null);render();break;
-    case'switchspace':flushLogs();S.space=v;lsSet('fu_space',v);S.tab=null;S.dd={};S.rkind='all';S.ai={busy:false,key:null,text:''};render();try{window.scrollTo(0,0);}catch(e){}toast((v==='solo'?'개인 · 개인 레슨':'아카데미')+'으로 바꿨어요.');break;
+    case'suspace':S.drafts.space=v;S.authErr='';render();break;
+    case'pickspace':ask(SPACES[v].label+'(으)로 시작할까요? 한 번 정하면 직접 바꿀 수 없어요.','시작하기',async()=>{try{await Store.update('profiles',ME,{space:v});}catch(err){toast(err.message);}S.tab=null;render();try{window.scrollTo(0,0);}catch(e){}});break;
     case'ag':S.ag[v]=!S.ag[v];render();break;
     case'agall':{const on=!(S.ag.terms&&S.ag.privacy&&S.ag.overseas);S.ag.terms=S.ag.privacy=S.ag.overseas=on;render();break;}
     case'agage':S.ag.age=v;render();break;
@@ -1538,8 +1547,9 @@ document.addEventListener('click',async e=>{
       const su=S.authMode==='signup',D=S.drafts;
       S.authBusy=true;S.authErr='';render();
       try{
+        if(su&&!D.space)throw new Error('사용 방식을 골라 주세요.');
         if(su&&!agOk())throw new Error('약관 동의와 나이 확인을 완료해 주세요.');
-        const j=await API.req(su?'/auth/signup':'/auth/login',{method:'POST',body:{email:D.email,password:D.pw,name:D.name,agree:su?S.ag:undefined}});
+        const j=await API.req(su?'/auth/signup':'/auth/login',{method:'POST',body:{email:D.email,password:D.pw,name:D.name,space:su?D.space:undefined,agree:su?S.ag:undefined}});
         USER=j.user;ME=j.me;delete D.pw;S.loading=true;render();
         await Store.load();try{S.admin=!!(await API.req('/me')).admin;}catch(e){}S.loading=false;
       }catch(err){S.authErr=err.message;}
@@ -1593,6 +1603,10 @@ document.addEventListener('click',async e=>{
       if(JSON.stringify(S.lesson)===S.lessonSnap&&!S.newKeys.length){S.lesson=null;render();break;}
       ask('저장하지 않은 내용은 사라져요. 닫을까요?','닫기',()=>{dropNewMedia();S.lesson=null;render();},true);break;
     case'newclesson':{if(!playersOf(ME).length){toast('연결된 선수가 없어요.');break;}S.mediaMsg='';S.lesson=newCoachLesson(S.lessonPlayer&&S.lessonPlayer!=='all'?S.lessonPlayer:'');S.newKeys=[];S.lessonSnap=JSON.stringify(S.lesson);render();try{window.scrollTo(0,0);}catch(e){}break;}
+    case'sharecode':{const c=myCode();if(!c)break;const txt='FeedUp 코치 초대 코드: '+c+'\n앱에서 내 정보 → 코치 연결에 입력해 주세요.\n'+location.origin;
+      if(navigator.share){navigator.share({text:txt}).catch(()=>{});}
+      else if(navigator.clipboard){navigator.clipboard.writeText(txt).then(()=>toast('초대 코드를 복사했어요. 선수에게 붙여넣어 보내세요.'),()=>toast('코드: '+c));}
+      else toast('코드: '+c);break;}
     case'lplayer':if(S.lesson.media.length&&S.lesson.playerId!==v){toast('사진·영상을 올린 뒤에는 선수를 바꿀 수 없어요.');break;}S.lesson.playerId=v;render();break;
     case'lcoach':S.lesson.coachId=v;render();break;
     case'ltopic':{const t=S.lesson.topics,i=t.indexOf(v);if(i>=0)t.splice(i,1);else t.push(v);render();break;}
