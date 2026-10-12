@@ -151,9 +151,10 @@ function rows(){
 function table(){
   const L=rows();
   if(!L.length)return '<div class="empty">조건에 맞는 회원이 없어요.</div>';
-  return '<table><thead><tr><th>회원</th><th>역할</th><th>가입일</th><th>최근 활동</th><th class="n">담당 선수</th><th class="n">연결 코치</th><th class="n">학부모</th><th class="n">연습</th><th class="n">레슨</th><th class="n">라운드</th><th class="n">피드백</th></tr></thead><tbody>'+
+  return '<table><thead><tr><th>회원</th><th>역할</th><th>사용 방식</th><th>가입일</th><th>최근 활동</th><th class="n">담당 선수</th><th class="n">연결 코치</th><th class="n">학부모</th><th class="n">연습</th><th class="n">레슨</th><th class="n">라운드</th><th class="n">피드백</th></tr></thead><tbody>'+
     L.map(m=>'<tr><td><div class="nm">'+esc(m.name)+'</div><div class="em">'+esc(m.email)+'</div></td>'+
       '<td>'+m.roles.map(r=>'<span class="r '+r+'">'+RL[r]+'</span>').join('')+(m.under14?'<span class="r kid">14세 미만</span>':'')+(m.consent?'':'<span class="r warn">약관 미동의</span>')+'</td>'+
+      '<td><select class="spsel" data-id="'+esc(m.id)+'" aria-label="사용 방식 변경">'+(m.space?'':'<option value="" selected>미선택</option>')+[['academy','아카데미'],['solo','개인 · 개인 레슨']].map(o=>'<option value="'+o[0]+'"'+(m.space===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select></td>'+
       '<td>'+ymd(m.created)+'</td><td>'+ago(m.last)+'</td>'+
       '<td class="n">'+(m.roles.includes('coach')?m.players+(m.pending?' <span class="muted" style="font-size:12px">+'+m.pending+'</span>':''):'–')+'</td>'+
       '<td class="n">'+(m.coaches||'–')+'</td><td class="n">'+(m.parents||m.kids||'–')+'</td>'+
@@ -161,11 +162,20 @@ function table(){
 }
 function csv(){
   const L=rows(),q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
-  const head=['이름','이메일','역할','14세 미만','약관 동의','가입일','최근 활동','담당 선수','승인 대기','연결 코치','자녀 수','학부모 수','연습','레슨','라운드','피드백'];
-  const lines=[head.map(q).join(',')].concat(L.map(m=>[m.name,m.email,m.roles.map(r=>RL[r]).join('/'),m.under14?'Y':'',m.consent?'Y':'N',ymd(m.created),m.last?ymd(m.last):'',m.players,m.pending,m.coaches,m.kids,m.parents,m.logs,m.lessons,m.rounds,m.feedback].map(q).join(',')));
+  const head=['이름','이메일','사용 방식','역할','14세 미만','약관 동의','가입일','최근 활동','담당 선수','승인 대기','연결 코치','자녀 수','학부모 수','연습','레슨','라운드','피드백'];
+  const lines=[head.map(q).join(',')].concat(L.map(m=>[m.name,m.email,m.space==='solo'?'개인':m.space==='academy'?'아카데미':'',m.roles.map(r=>RL[r]).join('/'),m.under14?'Y':'',m.consent?'Y':'N',ymd(m.created),m.last?ymd(m.last):'',m.players,m.pending,m.coaches,m.kids,m.parents,m.logs,m.lessons,m.rounds,m.feedback].map(q).join(',')));
   const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='feedup_members_'+dkey(Date.now())+'.csv';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
 }
+document.addEventListener('change',async e=>{
+  const el=e.target;if(!el.classList||!el.classList.contains('spsel'))return;
+  const m=D.members.find(x=>x.id===el.dataset.id),label=el.options[el.selectedIndex].text;
+  if(!el.value||!confirm((m?m.name:'이 회원')+'님의 사용 방식을 '+label+'(으)로 바꿀까요?\n기존 기록은 지워지지 않고, 바꾼 방식의 기록만 보이게 돼요.')){el.value=m&&m.space||'';return;}
+  el.disabled=true;
+  try{const r=await fetch('/api/admin/space',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({id:el.dataset.id,space:el.value})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||('오류 '+r.status));if(m)m.space=el.value;}
+  catch(err){alert('바꾸지 못했어요: '+err.message);el.value=m&&m.space||'';}
+  el.disabled=false;
+});
 $('#reload').addEventListener('click',load);
 load();
 })();

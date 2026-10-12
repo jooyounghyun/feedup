@@ -104,6 +104,12 @@ function checkAgree(a) {
   if (a.age !== '14+') return { err: '나이 확인에 체크해 주세요.' };
   return { ok: { version: TERMS_VERSION, terms: true, privacy: true, overseas: true, age14: true, guardian: null, at: Date.now() } };
 }
+const SPACES = ['academy', 'solo'];
+const SPACE_NAME = { academy: '아카데미', solo: '개인 · 개인 레슨' };
+async function sameSpace(env, a, b) {
+  const pa = (await getDoc(env, 'profiles', a)) || {}, pb = (await getDoc(env, 'profiles', b)) || {};
+  return !pa.space || !pb.space || pa.space === pb.space ? null : pb.space;
+}
 async function signup(req, env) {
   const b = await body(req);
   const email = str(b.email, 120).trim().toLowerCase();
@@ -120,7 +126,8 @@ async function signup(req, env) {
   await env.DB.prepare('INSERT INTO users(id,email,pass_hash,salt,created) VALUES(?,?,?,?,?)')
     .bind(id, email, await hashPw(pw, salt), salt, Date.now()).run();
   const ME = 'u_' + id;
-  await putDoc(env, 'profiles', ME, { name, share: false, field: FIELD, coach: false, createdAt: Date.now() }, { owner: ME });
+  const space = SPACES.includes(b.space) ? b.space : null;
+  await putDoc(env, 'profiles', ME, { name, share: false, field: FIELD, coach: false, space, createdAt: Date.now() }, { owner: ME });
   await putDoc(env, 'consents', ME, ag.ok, { owner: ME });
   return J({ user: { id, email }, me: ME }, 200, { 'set-cookie': await newSession(env, id) });
 }
@@ -204,6 +211,8 @@ async function write(env, ME, b) {
       await putDoc(env, 'profiles', ME, {
         name, share: !!data.share, field: cur.field || FIELD,
         coach: !!cur.coach, code: cur.code || null, parent: !!cur.parent, pcode: cur.pcode || null, createdAt: cur.createdAt || Date.now(),
+        // 사용 방식(아카데미/개인)은 처음 한 번만 정해요. 바꾸는 건 관리자만 할 수 있어요.
+        space: cur.space || (SPACES.includes(data.space) ? data.space : null),
       }, { owner: ME });
       return J({ ok: true });
     }
@@ -378,6 +387,8 @@ async function joinCode(env, ME, b) {
     return fail('코드를 찾지 못했어요. 다시 확인해 주세요.', 404);
   }
   if (c.coachId === ME) return fail('내 코드예요. 자기 자신과는 연결할 수 없어요.');
+  const diff = await sameSpace(env, ME, c.coachId);
+  if (diff) return fail('이 코치는 ' + SPACE_NAME[diff] + ' 회원이에요. 사용 방식이 같아야 연결할 수 있어요. 변경이 필요하면 문의해 주세요.', 409);
   const id = c.coachId + '__' + ME;
   const ex = await getDoc(env, 'links', id);
   if (ex) return fail(ex.status === 'active' ? '이미 연결된 코치예요.' : '이미 요청했어요. 코치 승인을 기다리는 중이에요.', 409);
@@ -496,6 +507,14 @@ async function isAdmin(env, user) {
   const r = await env.DB.prepare("SELECT 1 AS ok FROM docs WHERE col='admins' AND lower(id)=?").bind(email).first();
   return !!r;
 }
+async function adminSpace(env, b) {
+  const id = str(b.id, 60), space = b.space;
+  if (!SPACES.includes(space)) return fail('사용 방식을 골라 주세요.');
+  const p = await getDoc(env, 'profiles', id);
+  if (!p) return fail('회원을 찾지 못했어요.', 404);
+  await putDoc(env, 'profiles', id, { ...p, space }, { owner: id });
+  return J({ ok: true });
+}
 async function adminOverview(env) {
   const all = async (q, ...b) => ((await env.DB.prepare(q).bind(...b).all()).results || []);
   const users = await all('SELECT id,email,created FROM users ORDER BY created DESC');
@@ -528,7 +547,7 @@ async function adminOverview(env) {
     const isParent = !!p.parent || kids.length > 0;
     const isPlayer = asPlayer.length > 0 || myParents.length > 0 || !!(pu.logs || pu.rounds || pu.lessons) || (!isCoach && !isParent);
     return {
-      name: p.name || '(프로필 없음)', email: u.email, created: u.created, last: act[me] || null,
+      id: me, space: p.space || null, name: p.name || '(프로필 없음)', email: u.email, created: u.created, last: act[me] || null,
       roles: [isPlayer && 'player', isCoach && 'coach', isParent && 'parent'].filter(Boolean),
       under14: !!(c && c.age14 === false), consent: !!c,
       players: asCoach.filter((l) => l.status === 'active').length, pending: asCoach.filter((l) => l.status === 'pending').length,
@@ -574,6 +593,8 @@ async function joinParent(env, ME, b) {
     return fail('코드를 찾지 못했어요. 다시 확인해 주세요.', 404);
   }
   if (c.playerId === ME) return fail('내 코드예요. 자기 자신과는 연결할 수 없어요.');
+  const diff = await sameSpace(env, ME, c.playerId);
+  if (diff) return fail('자녀 계정은 ' + SPACE_NAME[diff] + ' 회원이에요. 사용 방식이 같아야 연결할 수 있어요. 변경이 필요하면 문의해 주세요.', 409);
   const id = ME + '__' + c.playerId;
   if (await getDoc(env, 'parents', id)) return fail('이미 연결된 자녀예요.', 409);
   await putDoc(env, 'parents', id, { parentId: ME, playerId: c.playerId, status: 'active', createdAt: Date.now() }, { owner: ME, player: c.playerId });
@@ -624,6 +645,7 @@ export async function onRequest({ request: req, env, params }) {
     const ME = 'u_' + user.id;
 
     if (path === '/me' && m === 'GET') return J({ user, me: ME, admin: await isAdmin(env, user) });
+    if (path === '/admin/space' && m === 'POST') return (await isAdmin(env, user)) ? await adminSpace(env, await body(req)) : fail('관리자만 바꿀 수 있어요.', 403);
     if (path === '/admin/overview' && m === 'GET') return (await isAdmin(env, user)) ? await adminOverview(env) : fail('관리자만 볼 수 있어요.', 403);
     if (path === '/state' && m === 'GET') return J(await state(env, ME));
     if (path === '/docs' && m === 'POST') return await write(env, ME, await body(req));
