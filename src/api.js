@@ -105,6 +105,8 @@ function checkAgree(a) {
   return { ok: { version: TERMS_VERSION, terms: true, privacy: true, overseas: true, age14: true, guardian: null, at: Date.now() } };
 }
 const SPACES = ['academy', 'solo'];
+const PT_FIELD = { id: 'pt', label: 'PT' };
+const fieldOf = (p) => ((p && p.field && p.field.id) || 'golf');
 const SPACE_NAME = { academy: '아카데미', solo: '개인 · 개인 레슨' };
 async function sameSpace(env, a, b) {
   const pa = (await getDoc(env, 'profiles', a)) || {}, pb = (await getDoc(env, 'profiles', b)) || {};
@@ -127,7 +129,8 @@ async function signup(req, env) {
     .bind(id, email, await hashPw(pw, salt), salt, Date.now()).run();
   const ME = 'u_' + id;
   const space = SPACES.includes(b.space) ? b.space : null;
-  await putDoc(env, 'profiles', ME, { name, share: false, field: FIELD, coach: false, space, createdAt: Date.now() }, { owner: ME });
+  const field = b.app === 'pt' ? PT_FIELD : FIELD;
+  await putDoc(env, 'profiles', ME, { name, share: false, field, coach: false, space: b.app === 'pt' ? null : space, createdAt: Date.now() }, { owner: ME });
   await putDoc(env, 'consents', ME, ag.ok, { owner: ME });
   return J({ user: { id, email }, me: ME }, 200, { 'set-cookie': await newSession(env, id) });
 }
@@ -184,6 +187,10 @@ async function state(env, ME) {
   toMap(await rowsIn(env, 'homework', 'player', [ME, ...children]), out.homework);
   toMap(await rowsIn(env, 'lessons', 'player', [ME, ...children, ...shared]), out.lessons);
   toMap(await rowsIn(env, 'reports', 'owner', [ME]), out.reports);
+  // PT: 나와 내 회원들의 기록 + 내가 만든 운동
+  out.ptdocs = {};
+  toMap(await rowsIn(env, 'ptdocs', 'player', [ME, ...players]), out.ptdocs);
+  toMap(await rowsIn(env, 'ptdocs', 'owner', [ME]), out.ptdocs);
   return out;
 }
 
@@ -349,6 +356,37 @@ async function write(env, ME, b) {
       if (cur.parentId !== ME && cur.playerId !== ME) return deny();
       await delDoc(env, col, id); return J({ ok: true });
     }
+    case 'ptdocs': {
+      // PT 기록. 회원이 쓰는 것(log 운동, meal 식단, pain 통증), 트레이너가 쓰는 것(session 수업, class 일정, fb 피드백, pkg 회원권),
+      // 둘 다 쓰는 것(inbody), 트레이너 자신의 운동(cex). 쓴 사람만 고치고 지울 수 있어요.
+      const mm = id.match(/^(log|meal|pain|session|class|fb|pkg|inbody|cex)_[a-z0-9_]{4,90}$/);
+      if (!mm) return deny();
+      const kind = mm[1];
+      const cur = await getDoc(env, col, id);
+      if (kind === 'cex') {
+        if (cur && cur.author !== ME) return deny();
+        if (del) { if (cur) await delDoc(env, col, id); return J({ ok: true }); }
+        await putDoc(env, col, id, { kind, author: ME, name: str(data.name, 40), part: str(data.part, 10), eq: str(data.eq, 20), updatedAt: Date.now() }, { owner: ME });
+        return J({ ok: true });
+      }
+      const memberId = cur ? cur.memberId : str(data.memberId, 60);
+      let role = null;
+      if (memberId === ME) role = 'member';
+      else if (memberId && (await isActivePlayer(env, ME, memberId))) role = 'trainer';
+      if (!role) return deny();
+      if (['log', 'meal', 'pain'].includes(kind) && role !== 'member') {
+        // 트레이너는 회원 통증을 '확인함'으로만 바꿀 수 있어요
+        if (kind === 'pain' && cur && !del) { await putDoc(env, col, id, { ...cur, seen: true }, { player: memberId }); return J({ ok: true }); }
+        return deny();
+      }
+      if (['session', 'class', 'fb', 'pkg'].includes(kind) && role !== 'trainer') return deny();
+      if (cur && cur.author !== ME) return deny();
+      if (del) { if (cur) await delDoc(env, col, id); return J({ ok: true }); }
+      const clean = { ...data };
+      delete clean.memberId; delete clean.author; delete clean.kind;
+      await putDoc(env, col, id, { ...clean, kind, memberId, author: ME, createdAt: (cur && cur.createdAt) || Date.now(), updatedAt: Date.now() }, { player: memberId, coach: role === 'trainer' ? ME : null });
+      return J({ ok: true });
+    }
     case 'links': {
       const cur = await getDoc(env, col, id);
       if (!cur) return fail('연결 정보를 찾지 못했어요.', 404);
@@ -387,6 +425,8 @@ async function joinCode(env, ME, b) {
     return fail('코드를 찾지 못했어요. 다시 확인해 주세요.', 404);
   }
   if (c.coachId === ME) return fail('내 코드예요. 자기 자신과는 연결할 수 없어요.');
+  const fa = fieldOf(await getDoc(env, 'profiles', ME)), fb = fieldOf(await getDoc(env, 'profiles', c.coachId));
+  if (fa !== fb) return fail(fb === 'pt' ? '이 코드는 PT 트레이너 코드예요. PT 앱에서 입력해 주세요.' : '이 코드는 골프 코치 코드예요. 골프 FeedUp에서 입력해 주세요.', 409);
   const diff = await sameSpace(env, ME, c.coachId);
   if (diff) return fail('이 코치는 ' + SPACE_NAME[diff] + ' 회원이에요. 사용 방식이 같아야 연결할 수 있어요. 변경이 필요하면 문의해 주세요.', 409);
   const id = c.coachId + '__' + ME;
@@ -547,7 +587,7 @@ async function adminOverview(env) {
     const isParent = !!p.parent || kids.length > 0;
     const isPlayer = asPlayer.length > 0 || myParents.length > 0 || !!(pu.logs || pu.rounds || pu.lessons) || (!isCoach && !isParent);
     return {
-      id: me, space: p.space || null, name: p.name || '(프로필 없음)', email: u.email, created: u.created, last: act[me] || null,
+      id: me, space: p.space || null, field: (p.field && p.field.id) || 'golf', name: p.name || '(프로필 없음)', email: u.email, created: u.created, last: act[me] || null,
       roles: [isPlayer && 'player', isCoach && 'coach', isParent && 'parent'].filter(Boolean),
       under14: !!(c && c.age14 === false), consent: !!c,
       players: asCoach.filter((l) => l.status === 'active').length, pending: asCoach.filter((l) => l.status === 'pending').length,
@@ -627,6 +667,21 @@ async function ai(env, userId, b) {
 }
 
 /* ---------------- router ---------------- */
+/* ---------------- PT 의견 보내기 ---------------- */
+async function ptFeedback(env, ME, b) {
+  const text = str(b.text, 2000).trim();
+  if (!text) return fail('내용을 적어 주세요.');
+  const n = (await env.DB.prepare("SELECT COUNT(*) AS n FROM docs WHERE col='ptfeedback' AND owner=?").bind(ME).first()).n;
+  if (n >= 100) return fail('의견을 너무 많이 보냈어요. 감사합니다!', 429);
+  const p = (await getDoc(env, 'profiles', ME)) || {};
+  await putDoc(env, 'ptfeedback', 'f' + rand(8), { name: p.name || '', text, at: Date.now() }, { owner: ME });
+  return J({ ok: true });
+}
+async function ptFeedbackList(env) {
+  const r = (await env.DB.prepare("SELECT d.id,d.data,u.email FROM docs d LEFT JOIN users u ON ('u_'||u.id)=d.owner WHERE d.col='ptfeedback' ORDER BY d.updated DESC LIMIT 300").all()).results || [];
+  return J({ feedback: r.map((x) => ({ id: x.id, email: x.email || '', ...JSON.parse(x.data) })) });
+}
+
 // 관리자 전용 페이지(/pt 미리보기 등)에서 쓰는 확인 함수
 export async function adminUser(req, env) {
   if (!env.DB) return null;
@@ -651,6 +706,8 @@ export async function onRequest({ request: req, env, params }) {
     const ME = 'u_' + user.id;
 
     if (path === '/me' && m === 'GET') return J({ user, me: ME, admin: await isAdmin(env, user) });
+    if (path === '/ptfeedback' && m === 'POST') return await ptFeedback(env, ME, await body(req));
+    if (path === '/admin/ptfeedback' && m === 'GET') return (await isAdmin(env, user)) ? await ptFeedbackList(env) : fail('관리자만 볼 수 있어요.', 403);
     if (path === '/admin/space' && m === 'POST') return (await isAdmin(env, user)) ? await adminSpace(env, await body(req)) : fail('관리자만 바꿀 수 있어요.', 403);
     if (path === '/admin/overview' && m === 'GET') return (await isAdmin(env, user)) ? await adminOverview(env) : fail('관리자만 볼 수 있어요.', 403);
     if (path === '/state' && m === 'GET') return J(await state(env, ME));

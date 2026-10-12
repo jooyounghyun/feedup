@@ -82,7 +82,7 @@ th.n{text-align:right}
 </style>
 </head>
 <body>
-<header><div class="in"><a class="logo" href="/">FeedUp.</a><span class="tag">ADMIN</span><span class="sp"></span><a class="hbtn" href="/pt">PT 미리보기</a><button class="hbtn" id="reload" type="button">새로고침</button><a class="hbtn dark" href="/">앱으로</a></div></header>
+<header><div class="in"><a class="logo" href="/">FeedUp.</a><span class="tag">ADMIN</span><span class="sp"></span><a class="hbtn" href="/pt">PT 앱</a><button class="hbtn" id="reload" type="button">새로고침</button><a class="hbtn dark" href="/">앱으로</a></div></header>
 <main id="main"><div class="state"><p>불러오는 중…</p></div></main>
 <script>
 (function(){
@@ -138,6 +138,13 @@ function render(){
   document.querySelectorAll('[data-role]').forEach(b=>b.addEventListener('click',()=>{st.role=b.dataset.role;render();}));
   $('#sort').addEventListener('change',e=>{st.sort=e.target.value;$('#tbl').innerHTML=table();});
   $('#csv').addEventListener('click',csv);
+  loadPtFb();
+}
+async function loadPtFb(){
+  const box=document.createElement('div');box.innerHTML='<h2>PT 앱 의견 <small>PT 앱 내 정보 → 의견 보내기</small></h2><div class="tw" id="ptfb"><div class="empty">불러오는 중…</div></div>';$('#main').appendChild(box);
+  try{const r=await fetch('/api/admin/ptfeedback',{credentials:'same-origin'});const j=await r.json();const L=j.feedback||[];
+    $('#ptfb').innerHTML=L.length?'<table style="min-width:600px"><thead><tr><th>보낸 사람</th><th>날짜</th><th>내용</th></tr></thead><tbody>'+L.map(f=>'<tr><td><div class="nm">'+esc(f.name||'')+'</div><div class="em">'+esc(f.email||'')+'</div></td><td>'+ymd(f.at)+'</td><td style="white-space:pre-wrap;line-height:1.5">'+esc(f.text)+'</td></tr>').join('')+'</tbody></table>':'<div class="empty">아직 받은 의견이 없어요.</div>';}
+  catch(e){$('#ptfb').innerHTML='<div class="empty">불러오지 못했어요.</div>';}
 }
 function kpi(l,v,d,hl){return '<div class="card kpi'+(hl?' hl':'')+'"><div class="l">'+l+'</div><div class="v num">'+v+'</div>'+(d?'<div class="d">'+esc(d)+'</div>':'')+'</div>';}
 function stat(l,v,s){return '<div class="stat"><span>'+l+'</span><span><b>'+v+'</b>'+(s?'<small>'+esc(s)+'</small>':'')+'</span></div>';}
@@ -154,7 +161,7 @@ function table(){
   return '<table><thead><tr><th>회원</th><th>역할</th><th>사용 방식</th><th>가입일</th><th>최근 활동</th><th class="n">담당 선수</th><th class="n">연결 코치</th><th class="n">학부모</th><th class="n">연습</th><th class="n">레슨</th><th class="n">라운드</th><th class="n">피드백</th></tr></thead><tbody>'+
     L.map(m=>'<tr><td><div class="nm">'+esc(m.name)+'</div><div class="em">'+esc(m.email)+'</div></td>'+
       '<td>'+m.roles.map(r=>'<span class="r '+r+'">'+RL[r]+'</span>').join('')+(m.under14?'<span class="r kid">14세 미만</span>':'')+(m.consent?'':'<span class="r warn">약관 미동의</span>')+'</td>'+
-      '<td><select class="spsel" data-id="'+esc(m.id)+'" aria-label="사용 방식 변경">'+(m.space?'':'<option value="" selected>미선택</option>')+[['academy','아카데미'],['solo','개인 · 개인 레슨']].map(o=>'<option value="'+o[0]+'"'+(m.space===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select></td>'+
+      '<td>'+(m.field==='pt'?'<span class="r coach">PT</span>':'<select class="spsel" data-id="'+esc(m.id)+'" aria-label="사용 방식 변경">'+(m.space?'':'<option value="" selected>미선택</option>')+[['academy','아카데미'],['solo','개인 · 개인 레슨']].map(o=>'<option value="'+o[0]+'"'+(m.space===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>')+'</td>'+
       '<td>'+ymd(m.created)+'</td><td>'+ago(m.last)+'</td>'+
       '<td class="n">'+(m.roles.includes('coach')?m.players+(m.pending?' <span class="muted" style="font-size:12px">+'+m.pending+'</span>':''):'–')+'</td>'+
       '<td class="n">'+(m.coaches||'–')+'</td><td class="n">'+(m.parents||m.kids||'–')+'</td>'+
@@ -163,7 +170,7 @@ function table(){
 function csv(){
   const L=rows(),q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
   const head=['이름','이메일','사용 방식','역할','14세 미만','약관 동의','가입일','최근 활동','담당 선수','승인 대기','연결 코치','자녀 수','학부모 수','연습','레슨','라운드','피드백'];
-  const lines=[head.map(q).join(',')].concat(L.map(m=>[m.name,m.email,m.space==='solo'?'개인':m.space==='academy'?'아카데미':'',m.roles.map(r=>RL[r]).join('/'),m.under14?'Y':'',m.consent?'Y':'N',ymd(m.created),m.last?ymd(m.last):'',m.players,m.pending,m.coaches,m.kids,m.parents,m.logs,m.lessons,m.rounds,m.feedback].map(q).join(',')));
+  const lines=[head.map(q).join(',')].concat(L.map(m=>[m.name,m.email,m.field==='pt'?'PT':m.space==='solo'?'개인':m.space==='academy'?'아카데미':'',m.roles.map(r=>RL[r]).join('/'),m.under14?'Y':'',m.consent?'Y':'N',ymd(m.created),m.last?ymd(m.last):'',m.players,m.pending,m.coaches,m.kids,m.parents,m.logs,m.lessons,m.rounds,m.feedback].map(q).join(',')));
   const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='feedup_members_'+dkey(Date.now())+'.csv';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
 }

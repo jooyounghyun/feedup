@@ -444,7 +444,6 @@ label.mitem{cursor:pointer;border:1.5px dashed var(--line);background:var(--card
 <body>
 <div class="splash" id="splash" role="button" tabindex="0" aria-label="FeedUp 시작하기">
   <div class="in">
-    <span class="chipk r r1">GOLF</span>
     <h1 class="logo r r1">FeedUp.</h1>
     <div class="en r r2">feedback upgrade</div>
     <div class="copy r r3">코칭을 기록으로,<br>성장을 데이터로</div>
@@ -729,6 +728,7 @@ function render(){
   const y=window.scrollY;
   if(S.loading||(USER&&!Store.ready)){app.innerHTML='<div class="loading">기록을 불러오는 중…</div>';return;}
   let html;
+  if(USER&&prof(ME)&&prof(ME).field&&prof(ME).field.id==='pt'){location.replace('/pt');return;}
   S.space=USER&&prof(ME)?(prof(ME).space||null):null;
   if(!USER){html=vAuth();}
   else if(!prof(ME)){html=vOnboard();}
@@ -776,7 +776,7 @@ function tabbar(){
 
 /* ---------- onboarding ---------- */
 function agOk(){const a=S.ag;if(!a.terms||!a.privacy||!a.overseas)return false;if(a.age==='14+')return true;if(a.age==='u14')return !!((a.gname||'').trim()&&(a.gphone||'').replace(/[^0-9]/g,'').length>=9&&a.gok);return false;}
-function authReady(){const su=S.authMode==='signup',D=S.drafts;return !!((D.email||'').trim()&&(D.pw||'').length>=(su?8:1)&&(!su||(D.space&&(D.name||'').trim()&&agOk())));}
+function authReady(){const su=S.authMode==='signup',D=S.drafts;return !!((D.email||'').trim()&&(D.pw||'').length>=(su?8:1)&&(!su||(D.sport&&(D.sport==='pt'||D.space)&&(D.name||'').trim()&&agOk())));}
 function agBlock(){
   const a=S.ag,all=a.terms&&a.privacy&&a.overseas;
   const row=(k,label,view)=>'<div class="agrow"><button class="agck'+(a[k]?' on':'')+'" data-act="ag" data-v="'+k+'" aria-pressed="'+!!a[k]+'"><span class="agbox">'+I.check+'</span>'+label+'</button>'+(view?'<button class="agview" data-act="terms" data-v="'+view+'">보기</button>':'')+'</div>';
@@ -796,13 +796,15 @@ function vSpace(){
   const card=k=>{const x=SPACES[k];return '<button class="spopt" data-act="pickspace" data-v="'+k+'"><span class="t">'+x.label+'</span><span class="d">'+x.desc+'</span><span class="tags">'+x.tags.map(t=>'<i>'+t+'</i>').join('')+'</span><span class="ar">'+I.right.replace('<svg','<svg width="18" height="18"')+'</span></button>';};
   return '<div class="onb"><div class="in"><h1 class="logo">FeedUp.</h1><p class="spq">어떻게 사용하시나요?</p><p class="hint" style="margin:0 0 16px">한 번 정하면 계속 이 방식으로 사용해요. 나중에 바꾸려면 문의해 주세요.</p>'+card('academy')+card('solo')+'<div class="foot" style="margin-top:18px"><button data-act="logout"><b>로그아웃</b></button></div></div></div>';
 }
-const spChip=()=>'<span class="chipk'+(SOLO()?' sp':'')+'">'+(S.space?SPACES[S.space].label:FIELD.label)+'</span>';
+const spChip=()=>S.space?'<span class="chipk'+(SOLO()?' sp':'')+'">'+SPACES[S.space].label+'</span>':'';
 function vAuth(){
   const su=S.authMode==='signup',D=S.drafts;
   const ready=authReady();
   return '<div class="onb"><div class="in">'+spChip()+'<h1 class="logo">FeedUp.</h1>'+
-    (su?'<label>사용 방식</label><div class="spsel">'+['academy','solo'].map(k=>'<button type="button" class="spopt sm'+(D.space===k?' on':'')+'" data-act="suspace" data-v="'+k+'" aria-pressed="'+(D.space===k)+'"><span class="t">'+SPACES[k].label+'</span><span class="d">'+SPACES[k].desc+'</span></button>').join('')+'</div><p class="hint" style="margin:2px 0 0">가입 후에는 바꿀 수 없어요. 변경이 필요하면 문의해 주세요.</p><div style="height:22px"></div>':'')+
-    (su?'<label for="aname">이름</label><input id="aname" type="text" data-field="name" value="'+esc(D.name||'')+'" placeholder="코치와 선수에게 보여요" autocomplete="name"><div style="height:22px"></div>':'')+
+    (su?'<label>종목</label><div class="spsel" style="grid-template-columns:1fr 1fr">'+[['golf','골프','연습 체크 · 레슨 · 라운드'],['pt','PT','운동 기록 · 인바디 · 수업 관리']].map(x=>'<button type="button" class="spopt sm'+(D.sport===x[0]?' on':'')+'" data-act="sport" data-v="'+x[0]+'" aria-pressed="'+(D.sport===x[0])+'"><span class="t">'+x[1]+'</span><span class="d">'+x[2]+'</span></button>').join('')+'</div><div style="height:18px"></div>':'')+
+    (su&&D.sport==='golf'?'<label>사용 방식</label><div class="spsel">'+['academy','solo'].map(k=>'<button type="button" class="spopt sm'+(D.space===k?' on':'')+'" data-act="suspace" data-v="'+k+'" aria-pressed="'+(D.space===k)+'"><span class="t">'+SPACES[k].label+'</span><span class="d">'+SPACES[k].desc+'</span></button>').join('')+'</div><div style="height:18px"></div>':'')+
+    (su&&D.sport?'<p class="hint" style="margin:-6px 0 18px">종목'+(D.sport==='golf'?'과 사용 방식은':'은')+' 가입 후에는 바꿀 수 없어요. 변경이 필요하면 문의해 주세요.</p>':'')+
+    (su?'<label for="aname">이름</label><input id="aname" type="text" data-field="name" value="'+esc(D.name||'')+'" placeholder="함께하는 코치·회원에게 보여요" autocomplete="name"><div style="height:22px"></div>':'')+
     '<label for="aemail">이메일</label><input id="aemail" type="email" data-field="email" value="'+esc(D.email||'')+'" placeholder="example@email.com" autocomplete="email" inputmode="email">'+
     '<div style="height:22px"></div><label for="apw">비밀번호</label><input id="apw" type="password" data-field="pw" value="'+esc(D.pw||'')+'" placeholder="'+(su?'8자 이상':'비밀번호')+'" autocomplete="'+(su?'new-password':'current-password')+'">'+
     (su?agBlock():'')+
@@ -1524,6 +1526,7 @@ document.addEventListener('click',async e=>{
       await Store.set('profiles',ME,{name:n,share:false,field:FIELD.id,createdAt:Date.now()});delete S.drafts.name;render();break;}
     case'authmode':S.authMode=v;S.authErr='';render();break;
     case'suspace':S.drafts.space=v;S.authErr='';render();break;
+    case'sport':S.drafts.sport=v;if(v==='pt')delete S.drafts.space;S.authErr='';render();break;
     case'pickspace':ask(SPACES[v].label+'(으)로 시작할까요? 한 번 정하면 직접 바꿀 수 없어요.','시작하기',async()=>{try{await Store.update('profiles',ME,{space:v});}catch(err){toast(err.message);}S.tab=null;render();try{window.scrollTo(0,0);}catch(e){}});break;
     case'ag':S.ag[v]=!S.ag[v];render();break;
     case'agall':{const on=!(S.ag.terms&&S.ag.privacy&&S.ag.overseas);S.ag.terms=S.ag.privacy=S.ag.overseas=on;render();break;}
@@ -1547,9 +1550,10 @@ document.addEventListener('click',async e=>{
       const su=S.authMode==='signup',D=S.drafts;
       S.authBusy=true;S.authErr='';render();
       try{
-        if(su&&!D.space)throw new Error('사용 방식을 골라 주세요.');
+        if(su&&!D.sport)throw new Error('종목을 골라 주세요.');
+        if(su&&D.sport==='golf'&&!D.space)throw new Error('사용 방식을 골라 주세요.');
         if(su&&!agOk())throw new Error('약관 동의와 나이 확인을 완료해 주세요.');
-        const j=await API.req(su?'/auth/signup':'/auth/login',{method:'POST',body:{email:D.email,password:D.pw,name:D.name,space:su?D.space:undefined,agree:su?S.ag:undefined}});
+        const j=await API.req(su?'/auth/signup':'/auth/login',{method:'POST',body:{email:D.email,password:D.pw,name:D.name,space:su&&D.sport==='golf'?D.space:undefined,app:su&&D.sport==='pt'?'pt':undefined,agree:su?S.ag:undefined}});
         USER=j.user;ME=j.me;delete D.pw;S.loading=true;render();
         await Store.load();try{S.admin=!!(await API.req('/me')).admin;}catch(e){}S.loading=false;
       }catch(err){S.authErr=err.message;}
