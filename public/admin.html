@@ -23,7 +23,9 @@ header .in{max-width:1180px;margin:0 auto;padding:12px 20px;display:flex;align-i
 .logo{font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-weight:900;letter-spacing:-.055em;font-size:22px;color:var(--ink);text-decoration:none}
 .tag{font-family:'Inter',sans-serif;font-weight:800;font-size:11px;letter-spacing:.12em;background:var(--ink);color:#fff;border-radius:5px;padding:3px 7px}
 .sp{flex:1}
-.hbtn{height:36px;padding:0 14px;border-radius:9px;border:1px solid var(--line);background:#fff;font-weight:700;font-size:13px;display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--ink)}
+.hbtn{height:34px;padding:0 12px;border-radius:9px;border:1px solid var(--line);background:#fff;font-weight:700;font-size:13px;display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--ink);white-space:nowrap;flex-shrink:0}
+.hbtns{display:flex;gap:6px;flex-shrink:0}
+@media (max-width:520px){header .in{padding:10px 12px;gap:6px}.logo{font-size:19px}.tag{font-size:9.5px;padding:2px 5px}.hbtns{gap:4px}.hbtn{height:30px;padding:0 9px;font-size:12px;border-radius:8px}}
 .hbtn.dark{background:var(--ink);color:#fff;border-color:var(--ink)}
 main{max-width:1180px;margin:0 auto;padding:20px 20px 60px}
 h1{font-size:26px;font-weight:900;letter-spacing:-.03em;margin:4px 0 2px}
@@ -82,7 +84,7 @@ th.n{text-align:right}
 </style>
 </head>
 <body>
-<header><div class="in"><a class="logo" href="/">FeedUp.</a><span class="tag">ADMIN</span><span class="sp"></span><a class="hbtn" href="/pt">PT 앱</a><button class="hbtn" id="reload" type="button">새로고침</button><a class="hbtn dark" href="/">앱으로</a></div></header>
+<header><div class="in"><a class="logo" href="/">FeedUp.</a><span class="tag">ADMIN</span><span class="sp"></span><span class="hbtns"><button class="hbtn" id="reload" type="button">새로고침</button><a class="hbtn" href="/pt">PT 앱</a><a class="hbtn dark" href="/">골프 앱</a></span></div></header>
 <main id="main"><div class="state"><p>불러오는 중…</p></div></main>
 <script>
 (function(){

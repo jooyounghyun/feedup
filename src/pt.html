@@ -700,12 +700,13 @@ function render(){
   if(!USER){location.replace('/');return;}
   if(!(Store.data.consents&&Store.data.consents[ME]&&Store.data.consents[ME].version===TERMS_VERSION)){app.innerHTML=vConsent();return;}
   const me=prof(ME);
-  if(me&&(!me.field||me.field.id!=='pt')){location.replace('/');return;}
+  const golfAdmin=me&&(!me.field||me.field.id!=='pt');
+  if(golfAdmin&&!S.admin){location.replace('/');return;}
   if(S.mode==='trainer'&&!trainerOn())S.mode='member';
   const valid=S.mode==='member'?['today','lessons','inbody','report','me']:['members','schedule','library','report','me'];
   if(!valid.includes(S.tab))S.tab=valid[0];
   const body={today:vToday,lessons:vLessons,inbody:vInbody,report:vReport,me:vMe,members:vMembers,schedule:vSchedule,library:vLibrary}[S.tab];
-  app.innerHTML=header()+'<main>'+body()+'</main>'+tabbar();
+  app.innerHTML=(golfAdmin?'<div style="background:#0B0B0C;color:#fff;font-size:12px;font-weight:700;text-align:center;padding:7px 12px;line-height:1.5">관리자 보기 · 골프 계정으로 PT를 보고 있어요. 트레이너·회원 연결은 PT로 가입한 계정으로 테스트해 주세요. <a href="/admin.html" style="color:#9DB8FF">관리자로</a></div>':'')+header()+'<main>'+body()+'</main>'+tabbar();
   const top=S.ov[S.ov.length-1];
   if(top){
     const html=OV[top.type](top);
@@ -802,7 +803,7 @@ document.addEventListener('click',async e=>{
     case'savecex':{const n=(top.name||'').trim();if(!n){toast('운동 이름을 넣어 주세요.');break;}const id='cex_'+ME+'_'+rid();Store.set(id,{kind:'cex',name:n,part:top.part,eq:top.eq});S.part=top.part;S.q='';pop();toast('“'+n+'”을(를) 추가했어요.');break;}
     case'delcex':if(!confirm('이 운동을 내 목록에서 지울까요?'))break;Store.del(v);pop();break;
     /* 트레이너 */
-    case'starttrainer':case'newcode':try{await API.req('/code',{method:'POST'});await Store.load();if(a==='starttrainer'){S.mode='trainer';S.tab='members';try{localStorage.setItem('fu_pt_mode',JSON.stringify('trainer'));}catch(x){}toast('트레이너 기능을 켰어요. 초대 코드를 회원에게 알려 주세요.');}else toast('초대 코드를 만들었어요.');}catch(err){toast(err.message);}render();break;
+    case'starttrainer':case'newcode':if(prof(ME)&&(!prof(ME).field||prof(ME).field.id!=='pt')){toast('골프 계정에서는 PT 트레이너 기능을 켤 수 없어요. PT로 가입한 계정으로 해 주세요.');break;}try{await API.req('/code',{method:'POST'});await Store.load();if(a==='starttrainer'){S.mode='trainer';S.tab='members';try{localStorage.setItem('fu_pt_mode',JSON.stringify('trainer'));}catch(x){}toast('트레이너 기능을 켰어요. 초대 코드를 회원에게 알려 주세요.');}else toast('초대 코드를 만들었어요.');}catch(err){toast(err.message);}render();break;
     case'sharecode':{const c=myCode();if(!c){toast('먼저 초대 코드를 만들어 주세요.');break;}const txt='FeedUp PT 트레이너 초대 코드: '+c+'\n'+location.origin+' 에서 종목을 PT로 골라 가입한 뒤, 내 정보 → 내 트레이너에 입력해 주세요.';if(navigator.share)navigator.share({text:txt}).catch(()=>{});else if(navigator.clipboard)navigator.clipboard.writeText(txt).then(()=>toast('초대 안내를 복사했어요.'),()=>toast('코드: '+c));else toast('코드: '+c);break;}
     case'join':{const c=(S.drafts.joincode||'').trim();if(!c){toast('코드를 넣어 주세요.');break;}try{const j=await API.req('/join',{method:'POST',body:{code:c}});S.drafts.joincode='';await Store.load();toast((j.coachName||'트레이너')+'님에게 연결을 요청했어요.');}catch(err){toast(err.message);}render();break;}
     case'approve':try{await API.req('/docs',{method:'POST',body:{op:'set',col:'links',id:v,data:{status:'active'}}});await Store.load();toast('연결했어요.');}catch(err){toast(err.message);}render();break;
@@ -866,7 +867,7 @@ async function refresh(){if(!USER||!Store.ready||S.ov.length||document.hidden)re
 setInterval(refresh,45000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
 (async function boot(){
-  try{const j=await API.req('/me');USER=j.user;ME=j.me;await Store.load();}catch(e){USER=null;}
+  try{const j=await API.req('/me');USER=j.user;ME=j.me;S.admin=!!j.admin;await Store.load();}catch(e){USER=null;}
   S.loading=false;render();
 })();
 
