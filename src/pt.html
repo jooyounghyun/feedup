@@ -158,6 +158,7 @@ textarea:focus,.inp:focus{border-color:var(--ink)}
 .agage button{border:1.5px solid var(--line);border-radius:10px;padding:10px 0;font-size:13.5px;font-weight:700}
 .agage button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .agg{padding:6px 0 10px}.agg p{font-size:13px;color:var(--muted);margin:0 0 8px}
+.sportsw{margin-left:8px;height:26px;padding:0 9px;border-radius:999px;border:1.5px solid var(--line);font-size:11.5px;font-weight:800;background:#fff;white-space:nowrap}
 .pill[disabled],.btn[disabled],.ibtn[disabled]{opacity:.4;pointer-events:none}
 </style>
 </head>
@@ -262,12 +263,16 @@ let USER=null,ME=null;
 const prof=id=>Store.data&&Store.data.profiles[id];
 const pName=id=>(prof(id)&&prof(id).name)||'회원';
 const tName=id=>{const n=(prof(id)&&prof(id).name)||'';return n?(/트레이너$|코치$|쌤$/.test(n)?n:n+' 트레이너'):'트레이너';};
-const links=()=>Object.entries(Store.data.links||{}).map(([id,l])=>Object.assign({},l,{id}));
+const fieldOf=p=>{const f=p&&p.field;return (typeof f==='string'?f:(f&&f.id))||'golf';};
+const sportsOf=p=>p&&Array.isArray(p.sports)&&p.sports.filter(Boolean).length?p.sports.filter(Boolean):[fieldOf(p)];
+const lsport=l=>l.sport||fieldOf(prof(l.coachId));
+const hasGolf=()=>sportsOf(prof(ME)).includes('golf');
+const links=()=>Object.entries(Store.data.links||{}).map(([id,l])=>Object.assign({},l,{id})).filter(l=>lsport(l)==='pt');
 const myMembers=()=>links().filter(l=>l.coachId===ME&&l.status==='active'&&prof(l.playerId)).map(l=>l.playerId);
 const myTrainers=()=>links().filter(l=>l.playerId===ME&&l.status==='active').map(l=>l.coachId);
 const requests=()=>links().filter(l=>l.coachId===ME&&l.status==='pending');
-const trainerOn=()=>!!(prof(ME)&&prof(ME).coach)||links().some(l=>l.coachId===ME);
-const myCode=()=>{const p=prof(ME),c=p&&p.code;return c&&Store.data.codes&&Store.data.codes[c]?c:null;};
+const trainerOn=()=>{const p=prof(ME);return !!(p&&((p.coaches&&p.coaches.pt)||(fieldOf(p)==='pt'&&p.coach)))||links().some(l=>l.coachId===ME);};
+const myCode=()=>{const p=prof(ME);if(!p)return null;const c=(p.codes&&p.codes.pt)||(fieldOf(p)==='pt'?p.code:null);return c&&Store.data.codes&&Store.data.codes[c]?c:null;};
 const docs=kind=>Object.entries(Store.data.ptdocs).filter(([id,d])=>d.kind===kind||id.startsWith(kind+'_')).map(([id,d])=>Object.assign({},d,{id}));
 const byDate=(a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||0)-(a.createdAt||0);
 const logId=(m,d)=>'log_'+m+'_'+d8(d);
@@ -301,7 +306,7 @@ const ebar=(title,right,act)=>'<div class="ebar"><button data-a="back">닫기</b
 function alertsNew(){if(S.mode!=='member')return false;let seen=0;try{seen=+localStorage.getItem('fu_pt_seen_'+ME)||0;}catch(e){}return docs('fb').concat(docs('session')).some(x=>x.memberId===ME&&(x.updatedAt||0)>seen);}
 function header(){
   const modes=trainerOn()?'<div class="seg" role="tablist" aria-label="모드"><button class="'+(S.mode==='member'?'on':'')+'" data-a="mode" data-v="member">회원</button><button class="'+(S.mode==='trainer'?'on':'')+'" data-a="mode" data-v="trainer">트레이너</button></div>':'';
-  return '<header><div><span class="logo">FeedUp.</span><span class="chip">PT</span></div><div style="display:flex;align-items:center;gap:6px">'+modes+
+  return '<header><div style="display:flex;align-items:center"><span class="logo">FeedUp.</span><span class="chip">PT</span>'+(hasGolf()?'<button class="sportsw" data-a="gogolf" aria-label="골프로 전환">⇄ 골프</button>':'')+'</div><div style="display:flex;align-items:center;gap:6px">'+modes+
     (S.mode==='member'?'<button class="ibtn" data-a="open" data-v="alerts" aria-label="알림">'+IC.bell+(alertsNew()?'<span class="dot"></span>':'')+'</button>':'')+'</div></header>';
 }
 function tabbar(){
@@ -469,6 +474,7 @@ function vMe(){
   h+='<div style="display:flex;gap:8px"><input class="inp" data-f="joincode" value="'+esc(S.drafts.joincode||'')+'" placeholder="트레이너에게 받은 코드 6자리" maxlength="8" autocapitalize="characters" style="height:46px"><button class="pill on" data-a="join" style="flex-shrink:0">연결 요청</button></div>';
   h+='<h2>트레이너 기능</h2><div class="card pad">'+(trainerOn()?'<p class="ds" style="margin:0 0 10px">트레이너 기능을 쓰고 있어요. 위쪽 버튼으로 회원 / 트레이너 화면을 바꿀 수 있어요.</p>'+codeCard(true):'<p class="ds" style="margin:0 0 10px;font-size:13.5px;line-height:1.6">회원을 가르치고 있다면 트레이너 기능을 켜세요. 초대 코드가 만들어지고, 연결된 회원의 운동·식단·인바디를 보고 수업 기록과 피드백을 남길 수 있어요.</p><button class="btn" data-a="starttrainer">트레이너 시작하기</button>')+'</div>';
   h+='<h2>의견 보내기</h2><div class="card pad"><p class="ds" style="margin:0 0 10px;font-size:13.5px">써 보시고 불편한 점이나 있었으면 하는 기능을 알려 주세요.</p><button class="btn ghost" data-a="open" data-v="feedback">의견 보내기</button></div>';
+  if(hasGolf())h+='<h2>종목</h2><div class="card pad" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span style="font-weight:700;font-size:14px">골프 · PT를 함께 쓰고 있어요</span><button class="pill on" data-a="gogolf" style="flex-shrink:0">골프로 가기</button></div>';
   h+='<div class="ds" style="text-align:center;margin-top:6px">'+esc(USER&&USER.email||'')+'</div><button class="btn ghost" data-a="logout">로그아웃</button>';
   return h;
 }
@@ -700,8 +706,9 @@ function render(){
   if(!USER){location.replace('/');return;}
   if(!(Store.data.consents&&Store.data.consents[ME]&&Store.data.consents[ME].version===TERMS_VERSION)){app.innerHTML=vConsent();return;}
   const me=prof(ME);
-  const golfAdmin=me&&(!me.field||me.field.id!=='pt');
-  if(golfAdmin&&!S.admin){location.replace('/');return;}
+  const golfAdmin=me&&!sportsOf(me).includes('pt');
+  if(golfAdmin&&!S.admin){try{localStorage.setItem('fu_sport','"golf"');}catch(x){}location.replace('/');return;}
+  if(!golfAdmin){try{localStorage.setItem('fu_sport','"pt"');}catch(x){}}
   if(S.mode==='trainer'&&!trainerOn())S.mode='member';
   const valid=S.mode==='member'?['today','lessons','inbody','report','me']:['members','schedule','library','report','me'];
   if(!valid.includes(S.tab))S.tab=valid[0];
@@ -741,6 +748,7 @@ document.addEventListener('click',async e=>{
       S.busy=false;render();break;}
     case'consent':if(!agOk()){S.err='필수 항목에 모두 동의해 주세요.';render();break;}try{await API.req('/consent',{method:'POST',body:{agree:S.ag}});await Store.load();S.err='';}catch(err){S.err=err.message;}render();break;
     case'logout':if(!confirm('로그아웃할까요?'))break;try{await API.req('/auth/logout',{method:'POST'});}catch(x){}location.reload();break;
+    case'gogolf':try{localStorage.setItem('fu_sport','"golf"');}catch(x){}location.href='/';break;
     case'mode':S.mode=v;try{localStorage.setItem('fu_pt_mode',JSON.stringify(v));}catch(x){}S.tab=null;S.ov=[];render();window.scrollTo(0,0);break;
     case'tab':S.tab=v;S.q='';render();window.scrollTo(0,0);break;
     case'view':S.view=v;render();break;
@@ -803,12 +811,12 @@ document.addEventListener('click',async e=>{
     case'savecex':{const n=(top.name||'').trim();if(!n){toast('운동 이름을 넣어 주세요.');break;}const id='cex_'+ME+'_'+rid();Store.set(id,{kind:'cex',name:n,part:top.part,eq:top.eq});S.part=top.part;S.q='';pop();toast('“'+n+'”을(를) 추가했어요.');break;}
     case'delcex':if(!confirm('이 운동을 내 목록에서 지울까요?'))break;Store.del(v);pop();break;
     /* 트레이너 */
-    case'starttrainer':case'newcode':if(prof(ME)&&(!prof(ME).field||prof(ME).field.id!=='pt')){toast('골프 계정에서는 PT 트레이너 기능을 켤 수 없어요. PT로 가입한 계정으로 해 주세요.');break;}try{await API.req('/code',{method:'POST'});await Store.load();if(a==='starttrainer'){S.mode='trainer';S.tab='members';try{localStorage.setItem('fu_pt_mode',JSON.stringify('trainer'));}catch(x){}toast('트레이너 기능을 켰어요. 초대 코드를 회원에게 알려 주세요.');}else toast('초대 코드를 만들었어요.');}catch(err){toast(err.message);}render();break;
+    case'starttrainer':case'newcode':if(!sportsOf(prof(ME)).includes('pt')){toast('PT 종목이 없는 계정이라 트레이너 기능을 켤 수 없어요. 관리자에게 PT 추가를 문의해 주세요.');break;}try{await API.req('/code',{method:'POST',body:{sport:'pt'}});await Store.load();if(a==='starttrainer'){S.mode='trainer';S.tab='members';try{localStorage.setItem('fu_pt_mode',JSON.stringify('trainer'));}catch(x){}toast('트레이너 기능을 켰어요. 초대 코드를 회원에게 알려 주세요.');}else toast('초대 코드를 만들었어요.');}catch(err){toast(err.message);}render();break;
     case'sharecode':{const c=myCode();if(!c){toast('먼저 초대 코드를 만들어 주세요.');break;}const txt='FeedUp PT 트레이너 초대 코드: '+c+'\n'+location.origin+' 에서 종목을 PT로 골라 가입한 뒤, 내 정보 → 내 트레이너에 입력해 주세요.';if(navigator.share)navigator.share({text:txt}).catch(()=>{});else if(navigator.clipboard)navigator.clipboard.writeText(txt).then(()=>toast('초대 안내를 복사했어요.'),()=>toast('코드: '+c));else toast('코드: '+c);break;}
     case'join':{const c=(S.drafts.joincode||'').trim();if(!c){toast('코드를 넣어 주세요.');break;}try{const j=await API.req('/join',{method:'POST',body:{code:c}});S.drafts.joincode='';await Store.load();toast((j.coachName||'트레이너')+'님에게 연결을 요청했어요.');}catch(err){toast(err.message);}render();break;}
     case'approve':try{await API.req('/docs',{method:'POST',body:{op:'set',col:'links',id:v,data:{status:'active'}}});await Store.load();toast('연결했어요.');}catch(err){toast(err.message);}render();break;
     case'unlink':if(!confirm('연결을 해제할까요?'))break;try{await API.req('/docs',{method:'POST',body:{op:'delete',col:'links',id:v}});await Store.load();}catch(err){toast(err.message);}render();break;
-    case'unlinkm':{if(!confirm(pName(v)+' 회원과 연결을 해제할까요? 서로 기록을 볼 수 없게 돼요.'))break;try{await API.req('/docs',{method:'POST',body:{op:'delete',col:'links',id:ME+'__'+v}});await Store.load();S.ov=[];}catch(err){toast(err.message);}render();break;}
+    case'unlinkm':{if(!confirm(pName(v)+' 회원과 연결을 해제할까요? 서로 기록을 볼 수 없게 돼요.'))break;try{await API.req('/docs',{method:'POST',body:{op:'delete',col:'links',id:(links().find(l=>l.coachId===ME&&l.playerId===v)||{}).id}});await Store.load();S.ov=[];}catch(err){toast(err.message);}render();break;}
     case'savename':{const n=(S.drafts.myname||'').trim();if(!n){toast('이름을 넣어 주세요.');break;}const me=prof(ME);me.name=n;Store.raw('profiles',ME,{name:n,share:!!me.share});delete S.drafts.myname;toast('이름을 바꿨어요.');render();break;}
     case'sendfb':{const ref=v,t=(S.drafts['fb_'+ref]||'').trim();if(!t){toast('피드백을 적어 주세요.');break;}const target=Store.data.ptdocs[ref];const m=target?target.memberId:null;if(!m)break;const ex=docs('fb').find(f=>f.ref===ref&&f.author===ME);const id=ex?ex.id:'fb_'+rid()+rid();Store.set(id,{kind:'fb',memberId:m,date:el.dataset.d,ref,type:el.dataset.t||'log',text:t});delete S.drafts['fb_'+ref];render();toast(pName(m)+'님에게 피드백을 보냈어요.');break;}
     case'smem':top.s.memberId=v;top.s.no=usedOf(v)+1;render();break;

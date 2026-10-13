@@ -425,6 +425,8 @@ label.mitem{cursor:pointer;border:1.5px dashed var(--line);background:var(--card
 .spopt .tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}
 .spopt .tags i{font-style:normal;font-size:11.5px;font-weight:700;background:#F2F4F7;border-radius:5px;padding:2px 7px;color:#0B0B0C}
 .spsel{display:grid;gap:8px;margin-top:8px}
+.modes button{white-space:nowrap}
+.sportsw{margin-left:6px;height:26px;padding:0 9px;border-radius:999px;border:1.5px solid var(--line);font-size:11.5px;font-weight:800;color:var(--ink);background:var(--card);white-space:nowrap}
 .spopt.sm{padding:12px 14px;margin:0}
 .spopt.sm .t{font-size:15.5px}
 .spopt.sm .d{font-size:12.5px;margin-top:2px}
@@ -622,11 +624,16 @@ const S={
 const prof=id=>Store.data.profiles[id]||null;
 const pName=id=>(prof(id)&&prof(id).name)||'이름 없음';
 const cName=id=>{const n=pName(id);return /코치$|프로$/.test(n)?n:n+' 코치';};
-const links=()=>Object.entries(Store.data.links).map(([id,l])=>Object.assign({},l,{id}));
+// 종목: 계정마다 sports 목록. 골프 화면에는 골프 연결만 보여요.
+const fieldOf=p=>{const f=p&&p.field;return (typeof f==='string'?f:(f&&f.id))||'golf';};
+const sportsOf=p=>p&&Array.isArray(p.sports)&&p.sports.filter(Boolean).length?p.sports.filter(Boolean):[fieldOf(p)];
+const lsport=l=>l.sport||fieldOf(prof(l.coachId));
+const multiSport=()=>{const p=prof(ME);return !!p&&sportsOf(p).includes('golf')&&sportsOf(p).includes('pt');};
+const links=()=>Object.entries(Store.data.links).map(([id,l])=>Object.assign({},l,{id})).filter(l=>lsport(l)==='golf');
 const coachesOf=p=>links().filter(l=>l.playerId===p&&l.status==='active').map(l=>l.coachId).filter(c=>prof(c));
 const playersOf=c=>links().filter(l=>l.coachId===c&&l.status==='active').map(l=>l.playerId).filter(p=>prof(p));
 const requestsFor=c=>links().filter(l=>l.coachId===c&&l.status==='pending'&&prof(l.playerId));
-const coachEnabled=()=>!!(prof(ME)&&prof(ME).coach)||links().some(l=>l.coachId===ME);
+const coachEnabled=()=>{const p=prof(ME);return !!(p&&((p.coaches&&p.coaches.golf)||(fieldOf(p)==='golf'&&p.coach)))||links().some(l=>l.coachId===ME);};
 const ownDrills=p=>{const d=Store.data.drills[(SOLO()?'s_':'')+p];return d?d.list:(SOLO()?SOLO_DRILLS:DEFAULT_DRILLS);};
 const unnamedOwn=p=>ownDrills(p).filter(d=>!(d.name||'').trim()).length;
 const coachDrills=c=>{const d=Store.data.drills['c_'+c];return d?d.list:[];};
@@ -728,7 +735,7 @@ function render(){
   const y=window.scrollY;
   if(S.loading||(USER&&!Store.ready)){app.innerHTML='<div class="loading">기록을 불러오는 중…</div>';return;}
   let html;
-  if(USER&&prof(ME)&&prof(ME).field&&prof(ME).field.id==='pt'){location.replace('/pt');return;}
+  if(USER&&prof(ME)){const sp=sportsOf(prof(ME));if(sp.includes('pt')&&(!sp.includes('golf')||lsGet('fu_sport','golf')==='pt')){location.replace('/pt');return;}}
   S.space=USER&&prof(ME)?(prof(ME).space||null):null;
   if(!USER){html=vAuth();}
   else if(!prof(ME)){html=vOnboard();}
@@ -764,7 +771,7 @@ function header(){
     const dot=S.mode!=='coach'&&coachEnabled()&&coachPending()>0;
     m='<div class="modes" role="tablist" aria-label="모드">'+modes.map(x=>'<button role="tab" aria-selected="'+(S.mode===x[0])+'" data-act="mode" data-v="'+x[0]+'" class="'+(S.mode===x[0]?'on':'')+'">'+x[1]+(x[0]==='coach'&&dot?'<span class="mdot"></span>':'')+'</button>').join('')+'</div>';
   }
-  return '<header class="top"><div class="brand"><span class="logo">FeedUp.</span>'+(modes.length>2?'':'<span class="field'+(SOLO()?' sp':'')+'">'+(SOLO()?'개인':'ACADEMY')+'</span>')+'</div><div class="topr">'+m+'<button class="skin" data-act="skin" aria-label="색상 테마 바꾸기"><i></i></button></div></header>';
+  return '<header class="top"><div class="brand"><span class="logo">FeedUp.</span>'+(modes.length>2||multiSport()?'':'<span class="field'+(SOLO()?' sp':'')+'">'+(SOLO()?'개인':'ACADEMY')+'</span>')+(multiSport()?'<button class="sportsw" data-act="gosport" aria-label="PT로 전환">⇄ PT</button>':'')+'</div><div class="topr">'+m+'<button class="skin" data-act="skin" aria-label="색상 테마 바꾸기"><i></i></button></div></header>';
 }
 function tabbar(){
   const t=S.mode==='coach'
@@ -1204,7 +1211,7 @@ function drillEditor(w,title,note){
     (L.length?L.map((d,i)=>'<div class="setrow"><input type="text" data-field="dn" data-w="'+w+'" data-i="'+i+'" value="'+esc(d.name)+'" placeholder="항목 이름" aria-label="항목 이름"><input type="text" data-field="dt" data-w="'+w+'" data-i="'+i+'" value="'+esc(d.target||'')+'" placeholder="목표" aria-label="목표"><button class="iconbtn" data-act="deldrill" data-w="'+w+'" data-v="'+i+'" aria-label="항목 삭제">'+I.x+'</button></div>').join(''):'<p class="muted" style="font-size:14px;margin:4px 4px 8px">항목이 없어요.</p>')+
     '<button class="btn ghost" data-act="adddrill" data-w="'+w+'" style="margin-top:6px">항목 추가</button></div><button class="btn" data-act="savedrills" data-w="'+w+'">저장</button>';
 }
-function myCode(){const me=prof(ME);return me&&me.code&&Store.data.codes[me.code]&&Store.data.codes[me.code].coachId===ME?me.code:null;}
+function myCode(){const me=prof(ME);if(!me)return null;const c=(me.codes&&me.codes.golf)||(fieldOf(me)==='golf'?me.code:null);return c&&Store.data.codes[c]&&Store.data.codes[c].coachId===ME?c:null;}
 function codeCard(){
   const code=myCode();
   return '<h2 style="margin-top:8px">내 초대 코드</h2><div class="card codebox">'+(code?'<div class="code num">'+esc(code)+'</div><p>선수가 내 정보 탭의 코치 연결에 이 코드를 입력하면 연결 요청이 와요.</p><div style="display:flex;gap:8px;justify-content:center;margin-top:14px"><button class="btn sm" data-act="sharecode" style="margin:0">코드 보내기</button><button class="btn ghost sm" data-act="newcode" style="margin:0">새 코드로 바꾸기</button></div>':'<p style="margin:0 0 12px">초대 코드를 만들어 선수에게 알려주면 선수와 연결돼요.</p><button class="btn" data-act="newcode" style="margin:0">초대 코드 만들기</button>')+'</div>';
@@ -1463,7 +1470,8 @@ function vChild(){
 function vMe(){
   const me=prof(ME);
   const nm=S.drafts.myname!=null?S.drafts.myname:me.name;
-  let h='<h2 style="margin-top:8px">이름</h2><div class="addline" style="margin-top:0"><input type="text" data-field="myname" value="'+esc(nm)+'"><button class="btn sm" data-act="savename">저장</button></div>';
+  let h=multiSport()?'<h2 style="margin-top:8px">종목</h2><div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span style="font-weight:700">골프 · PT를 함께 쓰고 있어요</span><button class="btn sm" data-act="gosport" style="margin:0">PT로 가기</button></div>':'';
+  h+='<h2'+(multiSport()?'':' style="margin-top:8px"')+'>이름</h2><div class="addline" style="margin-top:0"><input type="text" data-field="myname" value="'+esc(nm)+'"><button class="btn sm" data-act="savename">저장</button></div>';
   const mine=links().filter(l=>l.playerId===ME&&prof(l.coachId));
   h+='<h2>내 코치 <small>'+mine.filter(l=>l.status==='active').length+'명</small></h2><div class="card" style="padding:4px 16px">'+(mine.length?mine.map(l=>'<div class="prow"><span>'+esc(cName(l.coachId))+' '+(l.status==='pending'?'<span class="badge wait">승인 대기</span>':'')+'</span><button class="rbtn del" data-act="unlink" data-v="'+esc(l.id)+'">'+(l.status==='pending'?'요청 취소':'연결 해제')+'</button></div>').join(''):'<p class="muted" style="font-size:14px">연결된 코치가 없어요.</p>')+'</div>';
   h+='<div class="addline"><input type="text" data-field="joincode" placeholder="코치에게 받은 코드 6자리" value="'+esc(S.drafts.joincode||'')+'" autocapitalize="characters" maxlength="8"><button class="btn sm" data-act="join">연결 요청</button></div>';
@@ -1501,7 +1509,7 @@ function openRound(id,ro){
 }
 function closeRound(){S.round=null;S.roundSnap=null;S.roundRO=false;render();}
 async function newCode(){
-  await API.req('/code',{method:'POST'});
+  await API.req('/code',{method:'POST',body:{sport:'golf'}});
   await Store.load();
 }
 async function join(){
@@ -1526,6 +1534,7 @@ document.addEventListener('click',async e=>{
       await Store.set('profiles',ME,{name:n,share:false,field:FIELD.id,createdAt:Date.now()});delete S.drafts.name;render();break;}
     case'authmode':S.authMode=v;S.authErr='';render();break;
     case'suspace':S.drafts.space=v;S.authErr='';render();break;
+    case'gosport':lsSet('fu_sport','pt');location.href='/pt';break;
     case'sport':S.drafts.sport=v;if(v==='pt')delete S.drafts.space;S.authErr='';render();break;
     case'pickspace':ask(SPACES[v].label+'(으)로 시작할까요? 한 번 정하면 직접 바꿀 수 없어요.','시작하기',async()=>{try{await Store.update('profiles',ME,{space:v});}catch(err){toast(err.message);}S.tab=null;render();try{window.scrollTo(0,0);}catch(e){}});break;
     case'ag':S.ag[v]=!S.ag[v];render();break;
