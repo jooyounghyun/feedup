@@ -113,7 +113,7 @@ textarea:focus,.inp:focus{border-color:var(--ink)}
 .search input{flex:1;border:0;background:transparent;font-size:15px;outline:none;min-width:0}
 .mbar{display:grid;grid-template-columns:78px 1fr 40px;align-items:center;gap:8px;margin-bottom:7px;font-size:13px;font-weight:700}
 .mbar .tr{height:8px;border-radius:4px;background:var(--line2);overflow:hidden}.mbar .tr i{display:block;height:100%;border-radius:4px}
-.cmp{position:relative;height:380px;border-radius:18px;overflow:hidden;background:#E4E7EC;--x:50%}
+.cmp{position:relative;aspect-ratio:3/4;border-radius:18px;overflow:hidden;background:#E4E7EC;--x:50%}
 .cmp .lay{position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center}
 .cmp .before{background:#C7CBD2;clip-path:inset(0 calc(100% - var(--x)) 0 0)}
 .cmp .line{position:absolute;top:0;bottom:0;left:var(--x);width:3px;margin-left:-1.5px;background:#fff;pointer-events:none}
@@ -159,6 +159,27 @@ textarea:focus,.inp:focus{border-color:var(--ink)}
 .agage button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .agg{padding:6px 0 10px}.agg p{font-size:13px;color:var(--muted);margin:0 0 8px}
 .sportsw{margin-left:8px;height:26px;padding:0 9px;border-radius:999px;border:1.5px solid var(--line);font-size:11.5px;font-weight:800;background:#fff;white-space:nowrap}
+.mgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.mitem{position:relative;aspect-ratio:1/1;border-radius:12px;overflow:hidden;background:var(--soft)}
+.mthumb{display:block;width:100%;height:100%;position:relative}
+.mthumb img,.mthumb video{width:100%;height:100%;object-fit:cover;display:block}
+.mthumb .play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.18)}
+.mdel{position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:14px;background:rgba(11,11,12,.72);color:#fff;font-size:18px;line-height:1}
+.madd{border:1.5px dashed #C9CDD4;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer}
+.madd b{font-size:24px;font-weight:500;line-height:1}.madd input{display:none}
+.mup{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;font-size:12px;font-weight:700;color:var(--muted);padding:6px;background:rgba(242,244,247,.9)}
+.mcap{position:absolute;left:6px;bottom:6px;background:rgba(11,11,12,.7);color:#fff;border-radius:6px;padding:1px 6px;font-size:11px;font-weight:700}
+.btile{position:relative;aspect-ratio:3/4;border-radius:12px;overflow:hidden;background:var(--soft);display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.btile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.btile .bl{position:absolute;left:6px;bottom:6px;background:rgba(11,11,12,.72);color:#fff;border-radius:6px;padding:2px 7px;font-size:11.5px;font-weight:700}
+.bshot{position:relative;aspect-ratio:3/4;border-radius:16px;overflow:hidden;background:var(--soft);display:flex;align-items:center;justify-content:center;color:#B9BDC6}
+.bshot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.bshot img.ghost{opacity:.35}
+.bph2 svg{width:64px;height:64px}
+.cmp img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cmp .before{position:absolute;inset:0;clip-path:inset(0 calc(100% - var(--x)) 0 0)}
+.viewer{min-height:100vh;background:#000;display:flex;align-items:center;justify-content:center;position:relative}
+.viewer img,.viewer video{max-width:100%;max-height:100vh;display:block}
+.vclose{position:absolute;top:calc(12px + env(safe-area-inset-top));right:12px;width:44px;height:44px;border-radius:22px;background:rgba(255,255,255,.18);color:#fff;font-size:26px;z-index:2}
 .pill[disabled],.btn[disabled],.ibtn[disabled]{opacity:.4;pointer-events:none}
 </style>
 </head>
@@ -172,7 +193,9 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 const CHECK='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>';
 const IC={
   bell:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>',
-  search:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5B616E" stroke-width="2.4" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>'
+  search:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5B616E" stroke-width="2.4" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>',
+  person:'<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="7" r="3"/><path d="M6 21v-5a6 6 0 0 1 12 0v5"/></svg>',
+  arrows:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0B0B0C" stroke-width="2.5" aria-hidden="true"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg>'
 };
 /* ---------- 운동 그림 (선 그림, 120x90) ---------- */
 const G='#C9CDD4';
@@ -347,7 +370,7 @@ function vGolfAccount(){
 /* ---------- 회원: 오늘 ---------- */
 function ensureLog(d){const id=logId(ME,d);let l=Store.data.ptdocs[id];if(!l){l={kind:'log',memberId:ME,date:d,items:[],feel:'',submitted:false};}return [id,JSON.parse(JSON.stringify(l))];}
 let saveT={};
-function saveLog(id,l,now){Store.data.ptdocs[id]=Object.assign({},l,{author:ME});clearTimeout(saveT[id]);const go=()=>Store.set(id,{kind:'log',memberId:ME,date:l.date,items:l.items,feel:l.feel||'',submitted:!!l.submitted,submittedAt:l.submittedAt||null});if(now)go();else saveT[id]=setTimeout(go,700);}
+function saveLog(id,l,now){Store.data.ptdocs[id]=Object.assign({},l,{author:ME});clearTimeout(saveT[id]);const go=()=>Store.set(id,{kind:'log',memberId:ME,date:l.date,items:l.items,feel:l.feel||'',submitted:!!l.submitted,submittedAt:l.submittedAt||null,media:l.media||[]});if(now)go();else saveT[id]=setTimeout(go,700);}
 function vToday(){
   let h='<div class="seg" style="align-self:flex-start"><button class="'+(S.view==='workout'?'on':'')+'" data-a="view" data-v="workout">운동</button><button class="'+(S.view==='diet'?'on':'')+'" data-a="view" data-v="diet">식단</button></div>';
   const d=S.date,t=today(),dt=pd(d);
@@ -394,6 +417,7 @@ function sessionCard(s,viewer){
   ((s.ex||[]).length?'<div style="margin-top:8px">'+s.ex.map(x=>'<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line2);font-size:13.5px"><span>'+esc(exById(x[0]).name)+'</span><b style="text-align:right">'+esc(x[1]||'')+'</b></div>').join('')+'</div>':'')+
   (s.cmt?'<div style="font-size:13.5px;line-height:1.6;margin-top:8px;white-space:pre-line">'+esc(s.cmt)+'</div>':'')+
   (s.hw?'<div style="background:var(--soft);border-radius:10px;padding:10px 12px;margin-top:8px"><div style="font-size:12px;font-weight:800">숙제 <span class="mut" style="font-weight:500">(회원 오늘 화면에 1주일 표시)</span></div><div style="font-size:13.5px;margin-top:4px;white-space:pre-line">'+esc(s.hw)+'</div></div>':'')+
+  ((s.media||[]).length?'<div style="margin-top:10px">'+mediaGrid(s.media)+'</div>':'')+
   (viewer==='trainer'&&mine?'<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:10px"><button class="pill" data-a="editsession" data-v="'+s.id+'">수정</button><button class="pill" style="color:var(--bad)" data-a="delsession" data-v="'+s.id+'">삭제</button></div>':'')+'</div>';
 }
 function vLessons(){
@@ -427,7 +451,7 @@ function inbodyBlock(m,canAdd){
   if(canAdd)h+='<button class="btn" data-a="open" data-v="addInbody" data-i="'+m+'">+ 인바디 기록</button>';
   return h;
 }
-function vInbody(){return '<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:22px;font-weight:900">인바디</span></div>'+inbodyBlock(ME,true);}
+function vInbody(){return '<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:22px;font-weight:900">인바디</span></div>'+inbodyBlock(ME,true)+'<h2>눈바디 <small>나와 트레이너만 봐요</small></h2>'+bodyBlock(ME);}
 
 /* ---------- 리포트 ---------- */
 function range(){const a=S.anchor;if(S.period==='week'){const s=monday(a);return [s,addD(s,6)];}const d=pd(a);const s=ymd(new Date(d.getFullYear(),d.getMonth(),1)),e=ymd(new Date(d.getFullYear(),d.getMonth()+1,0));return [s,e];}
@@ -567,6 +591,7 @@ function ovSets(o){
     '<div style="display:flex;border-top:1px solid var(--line2)"><button style="flex:1;padding:12px;font-size:13.5px;font-weight:700;color:var(--muted)" data-a="addset">+ 세트 추가</button>'+(it.sets.length>1?'<button style="flex:1;padding:12px;font-size:13.5px;font-weight:700;color:var(--muted);border-left:1px solid var(--line2)" data-a="rmset">− 마지막 세트 빼기</button>':'')+'</div></div>';
   if(restEnd>Date.now())h+='<div class="timer"><div><div class="s">휴식 타이머</div><div class="v num" id="rest">'+fmtRest()+'</div></div><div style="display:flex;gap:6px"><button data-a="rest30">+30초</button><button class="w" data-a="restskip">건너뛰기</button></div></div>';
   h+='<div><span class="lbl">오늘 느낌</span><div class="grid2" style="grid-template-columns:repeat(4,minmax(0,1fr));gap:6px">'+['쉬움','적당','힘듦'].map(f=>'<button class="pill'+(l.feel===f?' on':'')+'" style="border-radius:10px" data-a="feel" data-v="'+f+'">'+f+'</button>').join('')+'<button class="pill" style="border-radius:10px;border-color:#F6C2B6;color:var(--bad)" data-a="open" data-v="pain" data-i="'+o.i+'">통증</button></div></div>';
+  h+='<div><span class="lbl">자세 영상·사진 <span style="font-weight:500">(트레이너가 보고 피드백해요)</span></span>'+mediaGrid((l.media||[]).filter(x=>x.ex===it.ex),{ctx:'log',del:true,add:true,max:4,label:'자세 영상'})+'</div>';
   h+='<button class="btn ghost" style="color:var(--bad)" data-a="rmitem" data-v="'+o.i+'">이 운동 빼기</button>';
   h+='</main><div class="foot"><button class="btn" data-a="nextset">'+(cur<0?'모든 세트 완료 · 닫기':(cur+1)+'세트 완료 · 휴식 시작')+'</button></div>';
   return h;
@@ -619,6 +644,7 @@ function ovSession(o){
   h+='<div><span class="lbl">부위 (여러 개 선택)</span><div class="pills">'+['상체','하체','유산소','코어','스트레칭'].map(p=>'<button class="pill'+(s.parts.includes(p)?' on':'')+'" data-a="spart" data-v="'+p+'">'+p+'</button>').join('')+'</div></div>';
   h+='<div><span class="lbl">오늘 한 운동</span><div class="card" style="overflow:hidden">'+(s.ex.length?s.ex.map((x,i)=>{const e=exById(x[0]);return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line2)"><span style="width:52px;height:40px;border-radius:8px;background:var(--soft);display:flex;align-items:center;justify-content:center;flex-shrink:0">'+(e.custom?'':figOf(e,52,39))+'</span><div style="flex:1;min-width:0"><div style="font-size:14.5px;font-weight:700">'+esc(e.name)+'</div><input class="inp" style="height:36px;padding:0 8px;font-size:13.5px;margin-top:4px" data-f="sexset" data-i="'+i+'" value="'+esc(x[1]||'')+'" placeholder="예: 80kg · 8회 × 5" aria-label="'+esc(e.name)+' 세트"></div><button class="mut" data-a="sexdel" data-v="'+i+'" aria-label="빼기" style="font-size:20px;padding:6px">×</button></div>';}).join(''):'<div class="ds" style="padding:12px;margin:0">아직 고른 운동이 없어요.</div>')+
     '<div style="display:flex"><button style="flex:1;padding:12px;font-size:13.5px;font-weight:700;color:var(--muted)" data-a="open" data-v="library" data-i="session">+ 운동 고르기</button><button style="flex:1;padding:12px;font-size:13.5px;font-weight:700;color:var(--muted);border-left:1px solid var(--line2)" data-a="loadlast">지난 수업 불러오기</button></div></div></div>';
+  h+='<div><span class="lbl">사진·영상 <span style="font-weight:500">(최대 6개, 영상은 1분 이내)</span></span>'+mediaGrid(s.media,{ctx:'session',del:true,add:true})+'</div>';
   h+='<div><label class="lbl" for="scmt">코멘트</label><textarea id="scmt" data-f="scmt" rows="3" placeholder="오늘 수업에서 좋았던 점, 고칠 점">'+esc(s.cmt)+'</textarea></div>';
   h+='<div><label class="lbl" for="shw">숙제 <span style="font-weight:500">(회원 오늘 화면에 1주일 표시)</span></label><textarea id="shw" data-f="shw" rows="2" placeholder="한 줄에 하나씩">'+esc(s.hw)+'</textarea></div>';
   return h+'</main><div class="foot"><button class="btn" data-a="savesession">'+(o.edit?'수정 내용 저장':'수업 기록 저장 · 회원에게 보내기')+'</button></div>';
@@ -658,11 +684,13 @@ function ovMember(o){
   h+=L.map(l=>{const its=l.items||[],fbs=fbsOf(m).filter(f=>f.ref===l.id),mine=fbs.find(f=>f.author===ME),draft=S.drafts['fb_'+l.id]!=null?S.drafts['fb_'+l.id]:(mine?mine.text:'');
     return '<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:center"><b class="num" style="font-size:17px">'+md(l.date)+' <span style="font-family:Noto Sans KR;font-size:12.5px" class="mut">'+WD[pd(l.date).getDay()]+'</span></b><span>'+(l.submitted?'<span class="badge b-blue">제출</span> ':'')+'<span class="ds" style="margin:0">'+its.filter(isDone).length+'/'+its.length+' 완료'+(l.feel?' · '+esc(l.feel):'')+'</span></span></div>'+
       its.map(it=>{const e=exById(it.ex);return '<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line2);font-size:13.5px"><span>'+(isDone(it)?'':'<span class="mut">')+esc(e.name)+(isDone(it)?'':'</span>')+'</span><span style="text-align:right;font-weight:700">'+(it.sets&&it.sets.length?it.sets.filter(s=>s.done).map(s=>s.kg+'×'+s.reps).join(' · ')||'<span class="mut">미완료</span>':esc(it.note||'')+(it.done?'':' <span class="mut">미완료</span>'))+'</span></div>';}).join('')+
+      ((l.media||[]).length?'<div style="margin-top:10px">'+mediaGrid(l.media)+'</div>':'')+
       '<div style="display:flex;gap:6px;margin-top:10px"><input class="inp" data-f="fbtext" data-i="'+l.id+'" value="'+esc(draft)+'" placeholder="피드백 한마디" style="height:42px"><button class="pill on" data-a="sendfb" data-v="'+l.id+'" data-d="'+l.date+'" style="flex-shrink:0">'+(mine?'수정':'보내기')+'</button></div></div>';}).join('');
   if(!o.more&&logsOf(m).filter(l=>(l.items||[]).length).length>5)h+='<button class="btn ghost" data-a="more">운동 기록 더 보기</button>';
   const meal=Store.data.ptdocs[mealId(m,today())]||Store.data.ptdocs[mealId(m,addD(today(),-1))];
   if(meal){const ms=meal.meals||{};h+='<h2>식단 <small>'+md(meal.date)+'</small></h2><div class="card" style="padding:4px 14px">'+SLOTS.map(k=>'<div style="display:flex;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid var(--line2);font-size:13.5px"><b style="flex-shrink:0">'+k+'</b><span style="text-align:right">'+(ms[k]&&ms[k].food?esc(ms[k].food)+(ms[k].kcal?' · '+ms[k].kcal+'kcal':''):'<span class="mut">기록 없음</span>')+'</span></div>').join('')+'<div style="display:flex;gap:6px;padding:10px 0"><input class="inp" data-f="fbtext" data-i="'+mealId(m,meal.date)+'" value="'+esc(S.drafts['fb_'+mealId(m,meal.date)]||'')+'" placeholder="식단 피드백" style="height:42px"><button class="pill on" data-a="sendfb" data-v="'+mealId(m,meal.date)+'" data-d="'+meal.date+'" data-t="diet" style="flex-shrink:0">보내기</button></div></div>';}
   h+='<h2>인바디</h2>'+inbodyBlock(m,false);
+  h+='<h2>눈바디</h2>'+bodyBlock(m);
   const ses=sessionsOf(m);
   h+='<h2>수업 기록 <small>'+ses.length+'회</small></h2>'+(ses.length?ses.slice(0,10).map(s=>sessionCard(s,'trainer')).join(''):'<div class="empty">아직 수업 기록이 없어요.</div>');
   h+='<button class="btn ghost" style="color:var(--bad);margin-top:8px" data-a="unlinkm" data-v="'+m+'">이 회원과 연결 해제</button>';
@@ -697,9 +725,127 @@ function ovFeedback(o){
   return ebar('의견 보내기')+'<main><p class="ds" style="margin:0;font-size:14px;line-height:1.6">좋았던 점, 불편했던 점, 꼭 있었으면 하는 기능을 자유롭게 적어 주세요.</p><textarea data-f="fbapp" rows="8" placeholder="예: 수업 기록할 때 운동 고르기가 편해요. 회원 출석 체크도 있으면 좋겠어요." aria-label="의견">'+esc(o.text||'')+'</textarea></main><div class="foot"><button class="btn" data-a="sendapp">보내기</button></div>';
 }
 
+/* ---------- 사진·영상 ---------- */
+const mediaUrl=k=>'/api/media/'+k.split('/').map(encodeURIComponent).join('/');
+function videoDuration(file){
+  return new Promise(res=>{
+    const v=document.createElement('video'),u=URL.createObjectURL(file);let done=false;
+    v.style.cssText='position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0';
+    const fin=d=>{if(done)return;done=true;try{v.remove();}catch(e){}URL.revokeObjectURL(u);res(d);};
+    const check=()=>{if(isFinite(v.duration)&&v.duration>0)fin(v.duration);};
+    v.preload='metadata';v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');
+    v.addEventListener('loadedmetadata',check);v.addEventListener('durationchange',check);v.addEventListener('canplay',check);
+    v.onerror=()=>fin(null);setTimeout(()=>fin(null),12000);
+    document.body.appendChild(v);v.src=u;try{v.load();}catch(e){}
+  });
+}
+function shrinkImage(file){
+  return new Promise(res=>{
+    const img=new Image(),u=URL.createObjectURL(file);
+    img.onload=()=>{
+      const M=1600,sc=Math.min(1,M/Math.max(img.naturalWidth,img.naturalHeight));
+      const c=document.createElement('canvas');c.width=Math.round(img.naturalWidth*sc);c.height=Math.round(img.naturalHeight*sc);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(u);
+      c.toBlob(b=>res(b||file),'image/jpeg',0.82);
+    };
+    img.onerror=()=>{URL.revokeObjectURL(u);res(file);};
+    img.src=u;
+  });
+}
+function mErr(m){S.mediaMsg=m;toast(m);render();}
+function uploadBlob(url,blob,type,onp){
+  return new Promise((res,rej)=>{
+    const x=new XMLHttpRequest();
+    x.open('POST',url);x.withCredentials=true;x.timeout=180000;x.setRequestHeader('content-type',type);
+    x.upload.onprogress=e=>{if(e.lengthComputable&&onp)onp(e.loaded/e.total);};
+    x.onload=()=>{let j={};try{j=JSON.parse(x.responseText);}catch(e){}
+      if(x.status>=200&&x.status<300)res(j);else{const er=new Error((j.error||'올리지 못했어요.')+' (오류 '+x.status+')');er.http=x.status;rej(er);}};
+    x.onerror=x.ontimeout=()=>rej(new Error('인터넷 연결이 불안정해서 올리지 못했어요. 와이파이에서 다시 시도해 주세요.'));
+    x.send(blob);
+  });
+}
+
+async function uploadPt(file,member,onp){
+  const name=(file.name||'').toLowerCase();
+  let type=(file.type||'').toLowerCase();
+  if(!type)type=/\.mov$/.test(name)?'video/quicktime':/\.(mp4|m4v)$/.test(name)?'video/mp4':/\.webm$/.test(name)?'video/webm':/\.(jpe?g)$/.test(name)?'image/jpeg':/\.png$/.test(name)?'image/png':/\.(heic|heif)$/.test(name)?'image/heic':'';
+  let blob=file;
+  if(type.startsWith('image/')){blob=await shrinkImage(file);type=(blob.type||type).toLowerCase();if(!/^image\/(jpeg|png|webp|gif)$/.test(type))throw new Error('이 사진 형식은 올릴 수 없어요. 다른 사진을 골라 주세요.');}
+  else if(type.startsWith('video/')){
+    if(type==='video/x-m4v')type='video/mp4';
+    if(!/^video\/(mp4|quicktime|webm)$/.test(type))throw new Error('mp4나 mov 영상만 올릴 수 있어요.');
+    if(file.size>40*1024*1024)throw new Error('영상 용량이 너무 커요. 40MB 이하(1분 이내)로 올려 주세요.');
+    const d=await videoDuration(file);if(d&&d>61)throw new Error('영상은 1분 이내로 올려 주세요.');
+  }else throw new Error('사진이나 영상만 올릴 수 있어요.');
+  return await uploadBlob('/api/ptmedia?member='+encodeURIComponent(member),blob,type,onp);
+}
+const PLAY='<span class="play" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></span>';
+function mediaGrid(list,opt){
+  opt=opt||{};list=list||[];
+  if(!list.length&&!opt.add)return '';
+  let h='<div class="mgrid">'+list.map((m,i)=>'<div class="mitem"><button class="mthumb" data-a="viewmedia" data-k="'+esc(m.key)+'" data-t="'+m.type+'" aria-label="'+(m.type==='video'?'영상 보기':'사진 크게 보기')+'">'+(m.type==='video'?'<video src="'+mediaUrl(m.key)+'#t=0.1" preload="metadata" muted playsinline></video>'+PLAY:'<img src="'+mediaUrl(m.key)+'" loading="lazy" alt="">')+'</button>'+(opt.del?'<button class="mdel" data-a="mrm" data-v="'+esc(m.key)+'" data-c="'+opt.ctx+'" aria-label="삭제">×</button>':'')+'</div>').join('');
+  if(opt.add&&S.up&&S.up.ctx===opt.ctx)h+='<div class="mitem"><div class="mup" id="upmsg">'+esc(S.up.msg||'올리는 중…')+'</div></div>';
+  else if(opt.add&&list.length<(opt.max||6))h+='<label class="mitem madd"><b>+</b>'+(opt.label||'사진·영상')+'<input type="file" accept="'+(opt.accept||'image/*,video/*')+'" data-f="mfile" data-c="'+opt.ctx+'" aria-label="'+(opt.label||'사진·영상')+' 추가"></label>';
+  return h+'</div>';
+}
+async function onFile(file,ctx){
+  const top=S.ov[S.ov.length-1];if(!file||!top)return;
+  let member=ME;
+  if(ctx==='session'){if(!top.s.memberId){toast('회원을 먼저 골라 주세요.');return;}member=top.s.memberId;}
+  if(ctx==='body')member=top.m;
+  S.up={ctx,msg:'준비 중…'};render();
+  try{
+    const r=await uploadPt(file,member,p=>{S.up.msg='올리는 중… '+Math.round(p*100)+'%';const el=document.getElementById('upmsg');if(el)el.textContent=S.up.msg;});
+    if(ctx==='session'){top.s.media=top.s.media||[];top.s.media.push({key:r.key,type:r.type});top.newKeys=(top.newKeys||[]).concat(r.key);}
+    else if(ctx==='log'){const [id,l]=curLog(),it=l.items[top.i];l.media=(l.media||[]).concat({key:r.key,type:r.type,ex:it?it.ex:''});saveLog(id,l,true);toast('트레이너가 볼 수 있게 올렸어요.');}
+    else if(ctx==='body'){if(r.type!=='image'){API.req('/media/'+r.key,{method:'DELETE'}).catch(()=>{});throw new Error('눈바디는 사진만 올릴 수 있어요.');}if(top.key&&top.fresh)API.req('/media/'+top.key,{method:'DELETE'}).catch(()=>{});top.key=r.key;top.fresh=true;}
+  }catch(err){toast(err.message||'올리지 못했어요.');}
+  S.up=null;render();
+}
+
+/* ---------- 눈바디 ---------- */
+const ANGLES=['정면','측면','후면'];
+const bodyOf=m=>docs('body').filter(x=>x.memberId===m&&x.key).sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.createdAt||0)-(b.createdAt||0));
+function bodyBlock(m){
+  const L=bodyOf(m),canCmp=ANGLES.some(a=>L.filter(x=>x.angle===a).length>=2);
+  let h='<div class="grid3">'+ANGLES.map(a=>{const x=L.filter(y=>y.angle===a).pop();return '<button class="btile" data-a="'+(x?'open':'open')+'" data-v="'+(x?'compare':'bodyadd')+'" data-i="'+m+'" data-g="'+a+'">'+(x?'<img src="'+mediaUrl(x.key)+'" loading="lazy" alt="'+a+' 사진">':'<span class="bph">'+IC.person+'</span>')+'<span class="bl">'+a+(x?' · '+md(x.date):'')+'</span></button>';}).join('')+'</div>';
+  h+='<div style="display:flex;gap:8px"><button class="btn ghost" data-a="open" data-v="bodyadd" data-i="'+m+'" style="flex:1">+ 눈바디 사진</button><button class="btn" data-a="open" data-v="compare" data-i="'+m+'" style="flex:1"'+(canCmp?'':' disabled')+'>비포·애프터 비교</button></div>';
+  if(!canCmp)h+='<p class="ds" style="margin:0">같은 각도 사진이 2장 이상 쌓이면 비교할 수 있어요. 2~4주마다 같은 자리, 같은 자세로 찍어 보세요.</p>';
+  return h;
+}
+function ovBodyAdd(o){
+  const L=bodyOf(o.m).slice().reverse();
+  let h=ebar('눈바디 사진','저장','savebody')+'<main>'+(o.m!==ME?'<p class="ds" style="margin:0;font-weight:700">'+esc(pName(o.m))+' 회원</p>':'');
+  h+='<div><span class="lbl">각도</span><div class="seg">'+ANGLES.map(a=>'<button style="flex:1" class="'+(o.angle===a?'on':'')+'" data-a="bangle" data-v="'+a+'">'+a+'</button>').join('')+'</div></div>';
+  h+='<div><label class="lbl" for="bd">찍은 날</label><input class="inp" id="bd" type="date" data-f="bdate" value="'+o.date+'" style="height:46px"></div>';
+  const last=bodyOf(o.m).filter(x=>x.angle===o.angle).pop();
+  h+='<div class="bshot">'+(o.key?'<img src="'+mediaUrl(o.key)+'" alt="올린 사진">':(last?'<img class="ghost" src="'+mediaUrl(last.key)+'" alt="">':'')+'<span class="bph2">'+IC.person+'</span>')+(S.up&&S.up.ctx==='body'?'<div class="mup" id="upmsg">'+esc(S.up.msg||'올리는 중…')+'</div>':'')+'</div>';
+  h+='<label class="btn ghost" style="cursor:pointer">'+(o.key?'다른 사진으로 바꾸기':'사진 고르기 · 찍기')+'<input type="file" accept="image/*" data-f="mfile" data-c="body" style="display:none"></label>';
+  if(last&&!o.key)h+='<p class="ds" style="margin:0">흐리게 보이는 건 지난번 '+o.angle+' 사진('+md(last.date)+')이에요. 같은 거리·자세로 찍으면 비교가 잘 돼요.</p>';
+  if(L.length)h+='<h2>올린 사진 <small>'+L.length+'장</small></h2><div class="mgrid">'+L.map(x=>'<div class="mitem"><button class="mthumb" data-a="viewmedia" data-k="'+esc(x.key)+'" data-t="image"><img src="'+mediaUrl(x.key)+'" loading="lazy" alt=""></button><span class="mcap">'+x.angle+' '+md(x.date)+'</span>'+(x.author===ME?'<button class="mdel" data-a="delbody" data-v="'+x.id+'" aria-label="삭제">×</button>':'')+'</div>').join('')+'</div>';
+  return h+'</main><div class="foot"><button class="btn" data-a="savebody"'+(o.key?'':' disabled')+'>저장</button></div>';
+}
+function nearestInbody(m,d){const L=inbodyOf(m);if(!L.length)return null;let best=null;L.forEach(x=>{if(x.date<=d)best=x;});return best||L[0];}
+function ovCompare(o){
+  const L=bodyOf(o.m).filter(x=>x.angle===o.angle);
+  let h=ebar('비포·애프터')+'<main><div class="seg">'+ANGLES.map(a=>'<button style="flex:1" class="'+(o.angle===a?'on':'')+'" data-a="cangle" data-v="'+a+'">'+a+'</button>').join('')+'</div>';
+  if(L.length<2)return h+'<div class="empty">'+o.angle+' 사진이 '+(L.length?'1장뿐이에요.':'없어요.')+'<br>같은 각도 사진이 2장 이상 있어야 비교할 수 있어요.</div><button class="btn" data-a="open" data-v="bodyadd" data-i="'+o.m+'" data-g="'+o.angle+'">+ '+o.angle+' 사진 올리기</button></main>';
+  const a=L.find(x=>x.id===o.a)||L[0],b=L.find(x=>x.id===o.b)||L[L.length-1];
+  const sel=(k,cur)=>'<select class="inp" data-f="'+k+'" style="height:44px" aria-label="'+(k==='ca'?'비교 시작':'비교 끝')+'">'+L.map(x=>'<option value="'+x.id+'"'+(x.id===cur.id?' selected':'')+'>'+md(x.date)+'</option>').join('')+'</select>';
+  h+='<div class="cmp" id="cmp"><img src="'+mediaUrl(b.key)+'" alt="AFTER"><div class="before"><img src="'+mediaUrl(a.key)+'" alt="BEFORE"></div><div class="line"></div><div class="knob">'+IC.arrows+'</div><span class="tag" style="left:12px;background:rgba(11,11,12,.78)">BEFORE '+md(a.date)+'</span><span class="tag" style="right:12px;background:'+A+'">AFTER '+md(b.date)+'</span><input type="range" min="0" max="100" value="50" data-f="cmp" aria-label="비교 위치"></div>';
+  h+='<div class="ds" style="text-align:center;margin:0">사진 위를 좌우로 밀어서 비교해요</div>';
+  h+='<div class="grid2" style="gap:8px"><div><span class="lbl">비포</span>'+sel('ca',a)+'</div><div><span class="lbl">애프터</span>'+sel('cb',b)+'</div></div>';
+  const ia=nearestInbody(o.m,a.date),ib=nearestInbody(o.m,b.date);
+  if(ia&&ib&&ia.id!==ib.id){const f=(x,dec)=>(x>=0?'+':'')+x.toFixed(dec);h+='<div class="grid3">'+[['체중',ib.w-ia.w,'kg',true],['체지방률',ib.f-ia.f,'%p',true],['골격근량',ib.m-ia.m,'kg',false]].map(x=>'<div class="tile"><div class="k">'+x[0]+'</div><div class="num '+((x[3]?x[1]<0:x[1]>0)?'good':x[1]?'bad':'')+'" style="font-size:20px;font-weight:800">'+f(x[1],1)+x[2]+'</div></div>').join('')+'</div><p class="ds" style="margin:0">인바디 '+md(ia.date)+' → '+md(ib.date)+' 기준</p>';}
+  return h+'</main>';
+}
+function ovViewer(o){
+  return '<div class="viewer"><button class="vclose" data-a="back" aria-label="닫기">×</button>'+(o.t==='video'?'<video src="'+mediaUrl(o.k)+'" controls autoplay playsinline></video>':'<img src="'+mediaUrl(o.k)+'" alt="">')+'</div>';
+}
+
 /* ---------- 렌더 ---------- */
 const app=document.getElementById('app');
-const OV={sets:ovSets,pain:ovPain,detail:ovDetail,library:ovLibrary,custom:ovCustom,session:ovSession,addInbody:ovInbodyAdd,meal:ovMeal,alerts:ovAlerts,member:ovMember,pkg:ovPkg,addclass:ovAddClass,classact:ovClassAct,renew:ovRenew,feedback:ovFeedback};
+const OV={bodyadd:ovBodyAdd,compare:ovCompare,viewer:ovViewer,sets:ovSets,pain:ovPain,detail:ovDetail,library:ovLibrary,custom:ovCustom,session:ovSession,addInbody:ovInbodyAdd,meal:ovMeal,alerts:ovAlerts,member:ovMember,pkg:ovPkg,addclass:ovAddClass,classact:ovClassAct,renew:ovRenew,feedback:ovFeedback};
 function render(){
   let ov=document.getElementById('ov');
   if(S.loading){app.innerHTML='<div class="onb" style="text-align:center;color:var(--muted)">불러오는 중…</div>';return;}
@@ -756,7 +902,14 @@ document.addEventListener('click',async e=>{
     case'period':S.period=v;render();break;
     case'rnav':{const n=+v;if(S.period==='week')S.anchor=addD(S.anchor,7*n);else{const d=pd(S.anchor);S.anchor=ymd(new Date(d.getFullYear(),d.getMonth()+n,1));}render();break;}
     case'rmem':S.rMember=v;render();break;
-    case'back':pop();break;
+    case'back':{if(top&&top.type==='session'&&top.newKeys)top.newKeys.forEach(k=>API.req('/media/'+k,{method:'DELETE'}).catch(()=>{}));if(top&&top.type==='bodyadd'&&top.fresh&&top.key)API.req('/media/'+top.key,{method:'DELETE'}).catch(()=>{});pop();break;}
+    case'viewmedia':push({type:'viewer',k:el.dataset.k,t:el.dataset.t});break;
+    case'mrm':{const c=el.dataset.c;if(c==='session'){top.s.media=(top.s.media||[]).filter(x=>x.key!==v);if((top.newKeys||[]).includes(v)){top.newKeys=top.newKeys.filter(k=>k!==v);API.req('/media/'+v,{method:'DELETE'}).catch(()=>{});}render();}
+      else if(c==='log'){if(!confirm('이 영상을 지울까요?'))break;const [id,l]=curLog();l.media=(l.media||[]).filter(x=>x.key!==v);saveLog(id,l,true);render();}break;}
+    case'bangle':top.angle=v;render();break;
+    case'cangle':top.angle=v;top.a=null;top.b=null;render();break;
+    case'savebody':{if(!top.key){toast('사진을 먼저 골라 주세요.');break;}Store.set('body_'+top.m+'_'+rid(),{kind:'body',memberId:top.m,date:top.date,angle:top.angle,key:top.key});top.fresh=false;pop();toast('눈바디 사진을 저장했어요.');break;}
+    case'delbody':if(!confirm('이 사진을 지울까요?'))break;Store.del(v);render();break;
     case'more':top.more=true;render();break;
     case'go':S.ov=[];S.tab=v;if(el.dataset.d&&v==='today')S.date=el.dataset.d;render();window.scrollTo(0,0);break;
     case'open':{
@@ -776,6 +929,8 @@ document.addEventListener('click',async e=>{
       else if(v==='classact')push({type:'classact',i});
       else if(v==='renew')push({type:'renew',i,pack:'20회',msg:pName(i)+'님, 그동안 정말 꾸준히 잘해 주셨어요. 지금 흐름을 이어가면 목표까지 금방이에요. 같은 시간대로 계속 잡아 둘게요!'});
       else if(v==='feedback')push({type:'feedback',text:''});
+      else if(v==='bodyadd')push({type:'bodyadd',m:i||ME,angle:el.dataset.g||'정면',date:today(),key:null});
+      else if(v==='compare'){const m=i||ME,L=bodyOf(m);let g=el.dataset.g;if(!g||L.filter(x=>x.angle===g).length<2)g=ANGLES.find(a=>L.filter(x=>x.angle===a).length>=2)||g||'정면';push({type:'compare',m,angle:g,a:null,b:null});}
       break;}
     /* 오늘 운동 */
     case'tick':{const [id,l]=curLog(),it=l.items[+v];if(!it)break;if(it.sets&&it.sets.length){const all=it.sets.every(s=>s.done);it.sets.forEach(s=>s.done=!all);}else it.done=!it.done;l.submitted=false;saveLog(id,l,true);render();break;}
@@ -823,11 +978,11 @@ document.addEventListener('click',async e=>{
     case'spart':{const p=top.s.parts,k=p.indexOf(v);if(k>=0)p.splice(k,1);else p.push(v);render();break;}
     case'sexdel':top.s.ex.splice(+v,1);render();break;
     case'loadlast':{if(!top.s.memberId){toast('회원을 먼저 골라 주세요.');break;}const last=sessionsOf(top.s.memberId).find(s=>s.id!==top.s.id);if(!last){toast('지난 수업 기록이 없어요.');break;}top.s.ex=(last.ex||[]).map(x=>x.slice());top.s.parts=(last.parts||[]).slice();render();toast(md(last.date)+' 수업을 불러왔어요.');break;}
-    case'savesession':{const s=top.s;if(!s.memberId){toast('회원을 골라 주세요.');break;}if(!s.ex.length&&!s.cmt.trim()&&!s.hw.trim()){toast('운동, 코멘트, 숙제 중 하나는 넣어 주세요.');break;}
-      const id=s.id||'session_'+rid()+rid();Store.set(id,{kind:'session',memberId:s.memberId,date:s.date,no:s.no||null,parts:s.parts,ex:s.ex.filter(x=>x[0]),cmt:s.cmt.trim(),hw:s.hw.trim()});
+    case'savesession':{const s=top.s;if(!s.memberId){toast('회원을 골라 주세요.');break;}if(S.up){toast('사진·영상을 올리는 중이에요. 잠시만 기다려 주세요.');break;}if(!s.ex.length&&!s.cmt.trim()&&!s.hw.trim()&&!(s.media||[]).length){toast('운동, 코멘트, 숙제, 사진 중 하나는 넣어 주세요.');break;}
+      const id=s.id||'session_'+rid()+rid();Store.set(id,{kind:'session',memberId:s.memberId,date:s.date,no:s.no||null,parts:s.parts,ex:s.ex.filter(x=>x[0]),cmt:s.cmt.trim(),hw:s.hw.trim(),media:s.media||[]});top.newKeys=[];
       if(top.classId){const c=Store.data.ptdocs[top.classId];if(c){const cc=Object.assign({},c,{status:'done'});delete cc.author;Store.set(top.classId,cc);}}
       S.ov=S.ov.filter(x=>x.type==='member');render();toast(top.edit?'수정했어요.':pName(s.memberId)+'님에게 수업 기록을 보냈어요.'+(s.hw.trim()?' 숙제는 오늘 화면에 들어가요.':''));break;}
-    case'editsession':{const s=Store.data.ptdocs[v];if(!s)break;push({type:'session',edit:true,s:{id:v,memberId:s.memberId,date:s.date,no:s.no,parts:(s.parts||[]).slice(),ex:(s.ex||[]).map(x=>x.slice()),cmt:s.cmt||'',hw:s.hw||''}});break;}
+    case'editsession':{const s=Store.data.ptdocs[v];if(!s)break;push({type:'session',edit:true,s:{id:v,memberId:s.memberId,date:s.date,no:s.no,parts:(s.parts||[]).slice(),ex:(s.ex||[]).map(x=>x.slice()),cmt:s.cmt||'',hw:s.hw||'',media:(s.media||[]).map(x=>Object.assign({},x))}});break;}
     case'delsession':if(!confirm('이 수업 기록을 지울까요?'))break;Store.del(v);render();break;
     case'delinbody':if(!confirm('이 인바디 기록을 지울까요?'))break;Store.del(v);render();break;
     case'saveinbody':{const o=top,vv=o.v,num=k=>vv[k]===''||vv[k]==null?null:+(+vv[k]).toFixed(1);if(num('w')==null||num('m')==null||num('f')==null){toast('체중, 골격근량, 체지방률을 넣어 주세요.');break;}
@@ -868,8 +1023,12 @@ document.addEventListener('input',e=>{
   if(f==='fbtext'){S.drafts['fb_'+el.dataset.i]=el.value;return;}
   if(f==='pkgtotal'){top.total=el.value;return;}if(f==='pkgstart'){top.start=el.value||today();return;}
   if(f==='cdate'){top.date=el.value;return;}if(f==='ctime'){top.time=el.value;return;}if(f==='cmemo'){top.memo=el.value;return;}
-  if(f==='rmsg'){top.msg=el.value;return;}if(f==='fbapp'){top.text=el.value;return;}
+  if(f==='rmsg'){top.msg=el.value;return;}
+  if(f==='bdate'){top.date=el.value||today();return;}
+  if(f==='ca'||f==='cb'){top[f==='ca'?'a':'b']=el.value;render();return;}
+  if(f==='cmp'){const c=document.getElementById('cmp');if(c)c.style.setProperty('--x',el.value+'%');return;}if(f==='fbapp'){top.text=el.value;return;}
 });
+document.addEventListener('change',e=>{const el=e.target;if(el.dataset&&el.dataset.f==='mfile'){const f=el.files&&el.files[0];const c=el.dataset.c;el.value='';if(f)onFile(f,c);}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&S.ov.length)pop();if(e.key==='Enter'&&e.target.dataset&&['email','pw','name'].includes(e.target.dataset.f)){const b=document.querySelector('[data-a="auth"]');if(b)b.click();}});
 async function refresh(){if(!USER||!Store.ready||S.ov.length||document.hidden)return;try{await Store.chain;await Store.load();render();}catch(e){}}
 setInterval(refresh,45000);
