@@ -446,6 +446,7 @@ label.mitem{cursor:pointer;border:1.5px dashed var(--line);background:var(--card
 <body>
 <div class="splash" id="splash" role="button" tabindex="0" aria-label="FeedUp 시작하기">
   <div class="in">
+    <span class="chipk r r1">GOLF · PT</span>
     <h1 class="logo r r1">FeedUp.</h1>
     <div class="en r r2">feedback upgrade</div>
     <div class="copy r r3">코칭을 기록으로,<br>성장을 데이터로</div>
@@ -803,7 +804,7 @@ function vSpace(){
   const card=k=>{const x=SPACES[k];return '<button class="spopt" data-act="pickspace" data-v="'+k+'"><span class="t">'+x.label+'</span><span class="d">'+x.desc+'</span><span class="tags">'+x.tags.map(t=>'<i>'+t+'</i>').join('')+'</span><span class="ar">'+I.right.replace('<svg','<svg width="18" height="18"')+'</span></button>';};
   return '<div class="onb"><div class="in"><h1 class="logo">FeedUp.</h1><p class="spq">어떻게 사용하시나요?</p><p class="hint" style="margin:0 0 16px">한 번 정하면 계속 이 방식으로 사용해요. 나중에 바꾸려면 문의해 주세요.</p>'+card('academy')+card('solo')+'<div class="foot" style="margin-top:18px"><button data-act="logout"><b>로그아웃</b></button></div></div></div>';
 }
-const spChip=()=>S.space?'<span class="chipk'+(SOLO()?' sp':'')+'">'+SPACES[S.space].label+'</span>':'';
+const spChip=()=>S.space?'<span class="chipk'+(SOLO()?' sp':'')+'">'+SPACES[S.space].label+'</span>':'<span class="chipk">GOLF · PT</span>';
 function vAuth(){
   const su=S.authMode==='signup',D=S.drafts;
   const ready=authReady();
