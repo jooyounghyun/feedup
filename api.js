@@ -73,9 +73,27 @@ async function isParentOf(env, parent, player) {
   return !!(await getDoc(env, 'parents', parent + '__' + player));
 }
 const LESSON_TOPICS = ['스윙', '숏게임', '퍼팅', '코스 매니지먼트', '멘탈'];
+// 종목: 계정마다 sports 목록(예: ['golf','pt']). 예전 계정은 가입 종목(field) 하나.
+const SPORTS = ['golf', 'pt'];
+const fid = (f) => (typeof f === 'string' ? f : (f && f.id)) || 'golf';
+const sportsOf = (p) => (p && Array.isArray(p.sports) && p.sports.filter(Boolean).length ? p.sports.filter(Boolean) : [fid(p && p.field)]);
+// 연결(links)의 종목. 예전 연결은 코치의 가입 종목으로 봐요.
+async function linkSport(env, l) {
+  if (l.sport) return l.sport;
+  const p = await getDoc(env, 'profiles', l.coachId);
+  return fid(p && p.field);
+}
+// 골프 코치-선수 연결 (id: 코치__선수)
 async function isActivePlayer(env, coach, player) {
   const l = await getDoc(env, 'links', coach + '__' + player);
-  return !!(l && l.status === 'active');
+  return !!(l && l.status === 'active' && (await linkSport(env, l)) === 'golf');
+}
+// PT 트레이너-회원 연결 (id: 트레이너__회원__pt, 예전 PT 연결은 접미사 없음)
+async function isActivePt(env, coach, player) {
+  const l = await getDoc(env, 'links', coach + '__' + player + '__pt');
+  if (l && l.status === 'active') return true;
+  const o = await getDoc(env, 'links', coach + '__' + player);
+  return !!(o && o.status === 'active' && (await linkSport(env, o)) === 'pt');
 }
 
 /* ---------------- auth ---------------- */
@@ -105,6 +123,8 @@ function checkAgree(a) {
   return { ok: { version: TERMS_VERSION, terms: true, privacy: true, overseas: true, age14: true, guardian: null, at: Date.now() } };
 }
 const SPACES = ['academy', 'solo'];
+const PT_FIELD = { id: 'pt', label: 'PT' };
+const fieldOf = (p) => fid(p && p.field);
 const SPACE_NAME = { academy: '아카데미', solo: '개인 · 개인 레슨' };
 async function sameSpace(env, a, b) {
   const pa = (await getDoc(env, 'profiles', a)) || {}, pb = (await getDoc(env, 'profiles', b)) || {};
@@ -127,7 +147,8 @@ async function signup(req, env) {
     .bind(id, email, await hashPw(pw, salt), salt, Date.now()).run();
   const ME = 'u_' + id;
   const space = SPACES.includes(b.space) ? b.space : null;
-  await putDoc(env, 'profiles', ME, { name, share: false, field: FIELD, coach: false, space, createdAt: Date.now() }, { owner: ME });
+  const field = b.app === 'pt' ? PT_FIELD : FIELD;
+  await putDoc(env, 'profiles', ME, { name, share: false, field, sports: [b.app === 'pt' ? 'pt' : 'golf'], codes: {}, coaches: {}, coach: false, space: b.app === 'pt' ? null : space, createdAt: Date.now() }, { owner: ME });
   await putDoc(env, 'consents', ME, ag.ok, { owner: ME });
   return J({ user: { id, email }, me: ME }, 200, { 'set-cookie': await newSession(env, id) });
 }
@@ -184,6 +205,10 @@ async function state(env, ME) {
   toMap(await rowsIn(env, 'homework', 'player', [ME, ...children]), out.homework);
   toMap(await rowsIn(env, 'lessons', 'player', [ME, ...children, ...shared]), out.lessons);
   toMap(await rowsIn(env, 'reports', 'owner', [ME]), out.reports);
+  // PT: 나와 내 회원들의 기록 + 내가 만든 운동
+  out.ptdocs = {};
+  toMap(await rowsIn(env, 'ptdocs', 'player', [ME, ...players]), out.ptdocs);
+  toMap(await rowsIn(env, 'ptdocs', 'owner', [ME]), out.ptdocs);
   return out;
 }
 
@@ -211,6 +236,7 @@ async function write(env, ME, b) {
       await putDoc(env, 'profiles', ME, {
         name, share: !!data.share, field: cur.field || FIELD,
         coach: !!cur.coach, code: cur.code || null, parent: !!cur.parent, pcode: cur.pcode || null, createdAt: cur.createdAt || Date.now(),
+        sports: sportsOf(cur), codes: cur.codes || {}, coaches: cur.coaches || {},
         // 사용 방식(아카데미/개인)은 처음 한 번만 정해요. 바꾸는 건 관리자만 할 수 있어요.
         space: cur.space || (SPACES.includes(data.space) ? data.space : null),
       }, { owner: ME });
@@ -349,6 +375,42 @@ async function write(env, ME, b) {
       if (cur.parentId !== ME && cur.playerId !== ME) return deny();
       await delDoc(env, col, id); return J({ ok: true });
     }
+    case 'ptdocs': {
+      // PT 기록. 회원이 쓰는 것(log 운동, meal 식단, pain 통증), 트레이너가 쓰는 것(session 수업, class 일정, fb 피드백, pkg 회원권),
+      // 둘 다 쓰는 것(inbody), 트레이너 자신의 운동(cex). 쓴 사람만 고치고 지울 수 있어요.
+      const mm = id.match(/^(log|meal|pain|session|class|fb|pkg|inbody|body|cex)_[a-z0-9_]{4,90}$/);
+      if (!mm) return deny();
+      const kind = mm[1];
+      const cur = await getDoc(env, col, id);
+      if (kind === 'cex') {
+        if (cur && cur.author !== ME) return deny();
+        if (del) { if (cur) await delDoc(env, col, id); return J({ ok: true }); }
+        await putDoc(env, col, id, { kind, author: ME, name: str(data.name, 40), part: str(data.part, 10), eq: str(data.eq, 20), updatedAt: Date.now() }, { owner: ME });
+        return J({ ok: true });
+      }
+      const memberId = cur ? cur.memberId : str(data.memberId, 60);
+      let role = null;
+      if (memberId === ME) role = 'member';
+      else if (memberId && (await isActivePt(env, ME, memberId))) role = 'trainer';
+      if (!role) return deny();
+      if (['log', 'meal', 'pain'].includes(kind) && role !== 'member') {
+        // 트레이너는 회원 통증을 '확인함'으로만 바꿀 수 있어요
+        if (kind === 'pain' && cur && !del) { await putDoc(env, col, id, { ...cur, seen: true }, { player: memberId }); return J({ ok: true }); }
+        return deny();
+      }
+      if (['session', 'class', 'fb', 'pkg'].includes(kind) && role !== 'trainer') return deny();
+      if (cur && cur.author !== ME) return deny();
+      const pfx = 'pt/' + memberId + '/';
+      const keysOf = (d) => [...((d && Array.isArray(d.media)) ? d.media.map((x) => x && x.key) : []), d && d.key].filter((k) => typeof k === 'string' && k.startsWith(pfx));
+      if (del) { if (cur) { await removeMedia(env, keysOf(cur)); await delDoc(env, col, id); } return J({ ok: true }); }
+      const clean = { ...data };
+      delete clean.memberId; delete clean.author; delete clean.kind;
+      if ('media' in clean) clean.media = (Array.isArray(clean.media) ? clean.media : []).filter((x) => x && typeof x.key === 'string' && x.key.startsWith(pfx) && !x.key.includes('..') && ['image', 'video'].includes(x.type)).slice(0, 12).map((x) => ({ key: x.key, type: x.type, ex: str(x.ex || '', 60) }));
+      if (kind === 'body') { if (typeof clean.key !== 'string' || !clean.key.startsWith(pfx) || clean.key.includes('..')) return fail('사진을 먼저 올려 주세요.'); clean.angle = ['정면', '측면', '후면'].includes(clean.angle) ? clean.angle : '정면'; }
+      if (cur) { const keep = new Set(keysOf(clean)); await removeMedia(env, keysOf(cur).filter((k) => !keep.has(k))); }
+      await putDoc(env, col, id, { ...clean, kind, memberId, author: ME, createdAt: (cur && cur.createdAt) || Date.now(), updatedAt: Date.now() }, { player: memberId, coach: role === 'trainer' ? ME : null });
+      return J({ ok: true });
+    }
     case 'links': {
       const cur = await getDoc(env, col, id);
       if (!cur) return fail('연결 정보를 찾지 못했어요.', 404);
@@ -365,18 +427,28 @@ async function write(env, ME, b) {
   }
 }
 
-async function makeCode(env, ME) {
+async function makeCode(env, ME, b) {
+  const p0 = (await getDoc(env, 'profiles', ME)) || {};
+  const sport = b && b.sport === 'pt' ? 'pt' : 'golf';
+  if (!sportsOf(p0).includes(sport)) return fail('이 계정은 ' + (sport === 'pt' ? 'PT' : '골프') + ' 종목을 쓰지 않아요. 종목 추가는 관리자에게 문의해 주세요.', 403);
   const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code;
   for (let t = 0; t < 10; t++) {
-    const b = new Uint8Array(6); crypto.getRandomValues(b);
-    code = [...b].map((x) => A[x % A.length]).join('');
+    const u = new Uint8Array(6); crypto.getRandomValues(u);
+    code = [...u].map((x) => A[x % A.length]).join('');
     if (!(await getDoc(env, 'codes', code)) && !(await getDoc(env, 'pcodes', code))) break;
   }
-  await env.DB.prepare("DELETE FROM docs WHERE col='codes' AND coach=?").bind(ME).run();
-  await putDoc(env, 'codes', code, { coachId: ME, createdAt: Date.now() }, { coach: ME });
+  const primary = fid(p0.field);
+  // 같은 종목의 예전 코드만 지워요 (종목마다 코드 하나)
+  for (const r of await rowsIn(env, 'codes', 'coach', [ME])) {
+    const d = JSON.parse(r.data);
+    if ((d.sport || primary) === sport) await delDoc(env, 'codes', r.id);
+  }
+  await putDoc(env, 'codes', code, { coachId: ME, sport, createdAt: Date.now() }, { coach: ME });
   const p = (await getDoc(env, 'profiles', ME)) || {};
-  await putDoc(env, 'profiles', ME, { ...p, code, coach: true }, { owner: ME });
+  const next = { ...p, codes: { ...(p.codes || {}), [sport]: code }, coaches: { ...(p.coaches || {}), [sport]: true } };
+  if (sport === primary) { next.code = code; next.coach = true; }
+  await putDoc(env, 'profiles', ME, next, { owner: ME });
   return J({ code });
 }
 async function joinCode(env, ME, b) {
@@ -387,12 +459,20 @@ async function joinCode(env, ME, b) {
     return fail('코드를 찾지 못했어요. 다시 확인해 주세요.', 404);
   }
   if (c.coachId === ME) return fail('내 코드예요. 자기 자신과는 연결할 수 없어요.');
-  const diff = await sameSpace(env, ME, c.coachId);
-  if (diff) return fail('이 코치는 ' + SPACE_NAME[diff] + ' 회원이에요. 사용 방식이 같아야 연결할 수 있어요. 변경이 필요하면 문의해 주세요.', 409);
-  const id = c.coachId + '__' + ME;
-  const ex = await getDoc(env, 'links', id);
-  if (ex) return fail(ex.status === 'active' ? '이미 연결된 코치예요.' : '이미 요청했어요. 코치 승인을 기다리는 중이에요.', 409);
-  await putDoc(env, 'links', id, { coachId: c.coachId, playerId: ME, status: 'pending', createdAt: Date.now() }, { coach: c.coachId, player: ME });
+  const coachP = (await getDoc(env, 'profiles', c.coachId)) || {};
+  const sport = c.sport || fid(coachP.field);
+  const meP = (await getDoc(env, 'profiles', ME)) || {};
+  if (!sportsOf(meP).includes(sport)) return fail(sport === 'pt' ? '이 코드는 PT 트레이너 코드예요. PT를 쓰는 계정에서 입력해 주세요. (종목 추가는 관리자에게 문의)' : '이 코드는 골프 코치 코드예요. 골프를 쓰는 계정에서 입력해 주세요. (종목 추가는 관리자에게 문의)', 409);
+  if (sport === 'golf') {
+    const diff = await sameSpace(env, ME, c.coachId);
+    if (diff) return fail('이 코치는 ' + SPACE_NAME[diff] + ' 회원이에요. 사용 방식이 같아야 연결할 수 있어요. 변경이 필요하면 문의해 주세요.', 409);
+  }
+  const id = c.coachId + '__' + ME + (sport === 'pt' ? '__pt' : '');
+  let ex = await getDoc(env, 'links', id);
+  if (!ex && sport === 'pt') { const o = await getDoc(env, 'links', c.coachId + '__' + ME); if (o && (await linkSport(env, o)) === 'pt') ex = o; }
+  const who = sport === 'pt' ? '트레이너' : '코치';
+  if (ex) return fail(ex.status === 'active' ? '이미 연결된 ' + who + '예요.' : '이미 요청했어요. ' + who + ' 승인을 기다리는 중이에요.', 409);
+  await putDoc(env, 'links', id, { coachId: c.coachId, playerId: ME, status: 'pending', sport, createdAt: Date.now() }, { coach: c.coachId, player: ME });
   const p = await getDoc(env, 'profiles', c.coachId);
   return J({ ok: true, coachName: p ? p.name : '' });
 }
@@ -430,11 +510,80 @@ async function mediaPut(req, env, ME, url) {
   await env.MEDIA.put(key, buf, { httpMetadata: { contentType: ct } });
   return J({ key, type: isImg ? 'image' : 'video' });
 }
+// PT 사진·영상: pt/<회원>/<올린 사람>/<파일> — 회원 본인과 연결된 트레이너만 올리고 볼 수 있어요.
+async function ptMediaPut(req, env, ME, url) {
+  if (!env.MEDIA) return fail('사진·영상 저장소가 아직 설정되지 않았어요.', 503);
+  const member = str(url.searchParams.get('member') || ME, 60);
+  if (!/^u_[a-z0-9]{4,40}$/.test(member)) return fail('회원 정보가 올바르지 않아요.');
+  if (member !== ME && !(await isActivePt(env, ME, member))) return fail('권한이 없어요.', 403);
+  const ct = (req.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  const isImg = !!IMG_TYPES[ct], isVid = !!VID_TYPES[ct];
+  if (!isImg && !isVid) return fail('사진(jpg, png) 또는 영상(mp4, mov) 파일만 올릴 수 있어요.');
+  const max = isImg ? 8 * 1024 * 1024 : 40 * 1024 * 1024;
+  if (+(req.headers.get('content-length') || 0) > max) return fail(isImg ? '사진 용량이 너무 커요.' : '영상 용량이 너무 커요. 40MB 이하로 올려 주세요.', 413);
+  const buf = await req.arrayBuffer();
+  if (!buf.byteLength || buf.byteLength > max) return fail('파일 용량을 확인해 주세요.', 413);
+  const key = 'pt/' + member + '/' + ME + '/' + rand(8) + '.' + (IMG_TYPES[ct] || VID_TYPES[ct]);
+  await env.MEDIA.put(key, buf, { httpMetadata: { contentType: ct } });
+  return J({ key, type: isImg ? 'image' : 'video' });
+}
+/* 큰 영상(원본) 나눠 올리기: 소리를 지키려고 압축 못 한 원본을 20MB씩 나눠 R2에 올려요 */
+const BIG_MAX = 400 * 1024 * 1024, PART = 20 * 1024 * 1024;
+async function bigStart(env, ME, b) {
+  if (!env.MEDIA) return fail('사진·영상 저장소가 아직 설정되지 않았어요.', 503);
+  const ct = str(b.type, 40).toLowerCase();
+  if (!VID_TYPES[ct]) return fail('mp4나 mov 영상만 올릴 수 있어요.');
+  if (!(+b.size > 0) || +b.size > BIG_MAX) return fail('영상 용량이 너무 커요. 400MB 이하로 올려 주세요.', 413);
+  let key;
+  if (b.kind === 'pt') {
+    const member = str(b.member || ME, 60);
+    if (!/^u_[a-z0-9]{4,40}$/.test(member)) return fail('회원 정보가 올바르지 않아요.');
+    if (member !== ME && !(await isActivePt(env, ME, member))) return fail('권한이 없어요.', 403);
+    key = 'pt/' + member + '/' + ME + '/' + rand(8) + '.' + VID_TYPES[ct];
+  } else {
+    const lessonId = str(b.lesson, 50);
+    if (!/^l[a-z0-9]{4,40}$/.test(lessonId)) return fail('레슨 정보가 올바르지 않아요.');
+    const cur = await getDoc(env, 'lessons', lessonId);
+    const owner = str(b.player || ME, 60);
+    if (owner === ME) { if (cur && (cur.author === 'coach' || cur.playerId !== ME)) return fail('권한이 없어요.', 403); }
+    else {
+      if (!(await isActivePlayer(env, ME, owner))) return fail('권한이 없어요.', 403);
+      if (cur && (cur.author !== 'coach' || cur.coachId !== ME || cur.playerId !== owner)) return fail('권한이 없어요.', 403);
+    }
+    key = 'lessons/' + owner + '/' + lessonId + '/' + rand(8) + '.' + VID_TYPES[ct];
+  }
+  const mpu = await env.MEDIA.createMultipartUpload(key, { httpMetadata: { contentType: ct } });
+  await putDoc(env, 'uploads', mpu.uploadId.slice(0, 180), { key, by: ME, size: +b.size, at: Date.now() }, { owner: ME });
+  return J({ key, uploadId: mpu.uploadId, partSize: PART });
+}
+async function bigCheck(env, ME, uploadId, key) {
+  const d = await getDoc(env, 'uploads', String(uploadId || '').slice(0, 180));
+  return d && d.by === ME && d.key === key ? d : null;
+}
+async function bigPart(req, env, ME, url) {
+  const key = url.searchParams.get('key') || '', uploadId = url.searchParams.get('uploadId') || '', n = +url.searchParams.get('n');
+  if (!(n >= 1 && n <= 40) || !(await bigCheck(env, ME, uploadId, key))) return fail('권한이 없어요.', 403);
+  const buf = await req.arrayBuffer();
+  if (!buf.byteLength || buf.byteLength > PART) return fail('조각 크기가 올바르지 않아요.', 413);
+  const part = await env.MEDIA.resumeMultipartUpload(key, uploadId).uploadPart(n, buf);
+  return J({ partNumber: part.partNumber, etag: part.etag });
+}
+async function bigDone(env, ME, b) {
+  const key = str(b.key, 200), uploadId = str(b.uploadId, 400);
+  if (!(await bigCheck(env, ME, uploadId, key))) return fail('권한이 없어요.', 403);
+  const up = env.MEDIA.resumeMultipartUpload(key, uploadId);
+  await delDoc(env, 'uploads', uploadId.slice(0, 180));
+  if (b.abort) { try { await up.abort(); } catch (e) {} return J({ ok: true }); }
+  const parts = (Array.isArray(b.parts) ? b.parts : []).map((p) => ({ partNumber: +p.partNumber, etag: str(p.etag, 200) })).sort((a, c) => a.partNumber - c.partNumber);
+  await up.complete(parts);
+  return J({ key, type: 'video' });
+}
 async function mediaGet(req, env, ME, key) {
   if (!env.MEDIA) return fail('사진·영상 저장소가 아직 설정되지 않았어요.', 503);
   const parts = key.split('/');
-  if (parts.length !== 4 || parts[0] !== 'lessons' || key.includes('..')) return fail('없는 파일이에요.', 404);
-  if (!(await canSeePlayer(env, ME, parts[1]))) return fail('권한이 없어요.', 403);
+  if (parts.length !== 4 || !['lessons', 'pt'].includes(parts[0]) || key.includes('..')) return fail('없는 파일이에요.', 404);
+  if (parts[0] === 'pt') { if (parts[1] !== ME && !(await isActivePt(env, ME, parts[1]))) return fail('권한이 없어요.', 403); }
+  else if (!(await canSeePlayer(env, ME, parts[1]))) return fail('권한이 없어요.', 403);
   const hasRange = !!req.headers.get('range');
   const obj = await env.MEDIA.get(key, hasRange ? { range: req.headers } : undefined);
   if (!obj) return fail('없는 파일이에요.', 404);
@@ -455,6 +604,10 @@ async function mediaGet(req, env, ME, key) {
 }
 async function mediaDelete(env, ME, key) {
   const parts = key.split('/');
+  if (parts.length === 4 && parts[0] === 'pt' && !key.includes('..')) {
+    if (parts[2] !== ME) return fail('직접 올린 파일만 지울 수 있어요.', 403);
+    await removeMedia(env, [key]); return J({ ok: true });
+  }
   if (parts.length !== 4 || parts[0] !== 'lessons' || key.includes('..')) return fail('권한이 없어요.', 403);
   if (parts[1] !== ME) {
     if (!(await isActivePlayer(env, ME, parts[1]))) return fail('권한이 없어요.', 403);
@@ -480,13 +633,15 @@ async function deleteAccount(req, env, user) {
   if (!u || !same(await hashPw(String(b.password || ''), u.salt), u.pass_hash)) return fail('비밀번호가 맞지 않아요.', 401);
   const ME = 'u_' + user.id;
   if (env.MEDIA) {
-    let cursor;
-    do {
-      const l = await env.MEDIA.list({ prefix: 'lessons/' + ME + '/', cursor });
-      const keys = l.objects.map((o) => o.key);
-      if (keys.length) await env.MEDIA.delete(keys);
-      cursor = l.truncated ? l.cursor : undefined;
-    } while (cursor);
+    for (const prefix of ['lessons/' + ME + '/', 'pt/' + ME + '/']) {
+      let cursor;
+      do {
+        const l = await env.MEDIA.list({ prefix, cursor });
+        const keys = l.objects.map((o) => o.key);
+        if (keys.length) await env.MEDIA.delete(keys);
+        cursor = l.truncated ? l.cursor : undefined;
+      } while (cursor);
+    }
   }
   await env.DB.batch([
     env.DB.prepare("DELETE FROM docs WHERE owner=?1 OR player=?1 OR (coach=?1 AND col IN ('links','codes','feedback'))").bind(ME),
@@ -506,6 +661,17 @@ async function isAdmin(env, user) {
   if (list.includes(email)) return true;
   const r = await env.DB.prepare("SELECT 1 AS ok FROM docs WHERE col='admins' AND lower(id)=?").bind(email).first();
   return !!r;
+}
+async function adminSports(env, b) {
+  const id = str(b.id, 60);
+  const sports = (Array.isArray(b.sports) ? b.sports : []).filter((x) => SPORTS.includes(x));
+  if (!sports.length) return fail('종목은 하나 이상이어야 해요.');
+  const p = await getDoc(env, 'profiles', id);
+  if (!p) return fail('회원을 찾지 못했어요.', 404);
+  const next = { ...p, sports: [...new Set(sports)] };
+  if (!next.sports.includes(fid(p.field))) next.field = next.sports[0] === 'pt' ? PT_FIELD : FIELD;
+  await putDoc(env, 'profiles', id, next, { owner: id });
+  return J({ ok: true });
 }
 async function adminSpace(env, b) {
   const id = str(b.id, 60), space = b.space;
@@ -547,7 +713,7 @@ async function adminOverview(env) {
     const isParent = !!p.parent || kids.length > 0;
     const isPlayer = asPlayer.length > 0 || myParents.length > 0 || !!(pu.logs || pu.rounds || pu.lessons) || (!isCoach && !isParent);
     return {
-      id: me, space: p.space || null, name: p.name || '(프로필 없음)', email: u.email, created: u.created, last: act[me] || null,
+      id: me, space: p.space || null, field: fid(p.field), sports: sportsOf(p), name: p.name || '(프로필 없음)', email: u.email, created: u.created, last: act[me] || null,
       roles: [isPlayer && 'player', isCoach && 'coach', isParent && 'parent'].filter(Boolean),
       under14: !!(c && c.age14 === false), consent: !!c,
       players: asCoach.filter((l) => l.status === 'active').length, pending: asCoach.filter((l) => l.status === 'pending').length,
@@ -627,6 +793,21 @@ async function ai(env, userId, b) {
 }
 
 /* ---------------- router ---------------- */
+/* ---------------- PT 의견 보내기 ---------------- */
+async function ptFeedback(env, ME, b) {
+  const text = str(b.text, 2000).trim();
+  if (!text) return fail('내용을 적어 주세요.');
+  const n = (await env.DB.prepare("SELECT COUNT(*) AS n FROM docs WHERE col='ptfeedback' AND owner=?").bind(ME).first()).n;
+  if (n >= 100) return fail('의견을 너무 많이 보냈어요. 감사합니다!', 429);
+  const p = (await getDoc(env, 'profiles', ME)) || {};
+  await putDoc(env, 'ptfeedback', 'f' + rand(8), { name: p.name || '', text, at: Date.now() }, { owner: ME });
+  return J({ ok: true });
+}
+async function ptFeedbackList(env) {
+  const r = (await env.DB.prepare("SELECT d.id,d.data,u.email FROM docs d LEFT JOIN users u ON ('u_'||u.id)=d.owner WHERE d.col='ptfeedback' ORDER BY d.updated DESC LIMIT 300").all()).results || [];
+  return J({ feedback: r.map((x) => ({ id: x.id, email: x.email || '', ...JSON.parse(x.data) })) });
+}
+
 // 관리자 전용 페이지(/pt 미리보기 등)에서 쓰는 확인 함수
 export async function adminUser(req, env) {
   if (!env.DB) return null;
@@ -651,16 +832,23 @@ export async function onRequest({ request: req, env, params }) {
     const ME = 'u_' + user.id;
 
     if (path === '/me' && m === 'GET') return J({ user, me: ME, admin: await isAdmin(env, user) });
+    if (path === '/ptfeedback' && m === 'POST') return await ptFeedback(env, ME, await body(req));
+    if (path === '/admin/ptfeedback' && m === 'GET') return (await isAdmin(env, user)) ? await ptFeedbackList(env) : fail('관리자만 볼 수 있어요.', 403);
+    if (path === '/admin/sports' && m === 'POST') return (await isAdmin(env, user)) ? await adminSports(env, await body(req)) : fail('관리자만 바꿀 수 있어요.', 403);
     if (path === '/admin/space' && m === 'POST') return (await isAdmin(env, user)) ? await adminSpace(env, await body(req)) : fail('관리자만 바꿀 수 있어요.', 403);
     if (path === '/admin/overview' && m === 'GET') return (await isAdmin(env, user)) ? await adminOverview(env) : fail('관리자만 볼 수 있어요.', 403);
     if (path === '/state' && m === 'GET') return J(await state(env, ME));
     if (path === '/docs' && m === 'POST') return await write(env, ME, await body(req));
-    if (path === '/code' && m === 'POST') return await makeCode(env, ME);
+    if (path === '/code' && m === 'POST') return await makeCode(env, ME, await body(req));
     if (path === '/join' && m === 'POST') return await joinCode(env, ME, await body(req));
     if (path === '/pcode' && m === 'POST') return await makePcode(env, ME);
     if (path === '/consent' && m === 'POST') return await giveConsent(env, ME, await body(req));
     if (path === '/account/delete' && m === 'POST') return await deleteAccount(req, env, user);
     if (path === '/media' && m === 'POST') return await mediaPut(req, env, ME, new URL(req.url));
+    if (path === '/upload/start' && m === 'POST') return await bigStart(env, ME, await body(req));
+    if (path === '/upload/part' && m === 'PUT') return await bigPart(req, env, ME, new URL(req.url));
+    if (path === '/upload/done' && m === 'POST') return await bigDone(env, ME, await body(req));
+    if (path === '/ptmedia' && m === 'POST') return await ptMediaPut(req, env, ME, new URL(req.url));
     if (path.startsWith('/media/') && (m === 'GET' || m === 'HEAD')) return await mediaGet(req, env, ME, decodeURIComponent(path.slice(7)));
     if (path.startsWith('/media/') && m === 'DELETE') return await mediaDelete(env, ME, decodeURIComponent(path.slice(7)));
     if (path === '/pjoin' && m === 'POST') return await joinParent(env, ME, await body(req));

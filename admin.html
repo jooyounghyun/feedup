@@ -23,7 +23,10 @@ header .in{max-width:1180px;margin:0 auto;padding:12px 20px;display:flex;align-i
 .logo{font-family:'Inter','Helvetica Neue',Arial,sans-serif;font-weight:900;letter-spacing:-.055em;font-size:22px;color:var(--ink);text-decoration:none}
 .tag{font-family:'Inter',sans-serif;font-weight:800;font-size:11px;letter-spacing:.12em;background:var(--ink);color:#fff;border-radius:5px;padding:3px 7px}
 .sp{flex:1}
-.hbtn{height:36px;padding:0 14px;border-radius:9px;border:1px solid var(--line);background:#fff;font-weight:700;font-size:13px;display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--ink)}
+.hbtn{height:34px;padding:0 12px;border-radius:9px;border:1px solid var(--line);background:#fff;font-weight:700;font-size:13px;display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--ink);white-space:nowrap;flex-shrink:0}
+.hbtns{display:flex;gap:6px;flex-shrink:0}
+.sps{display:flex;gap:10px;white-space:nowrap;font-weight:700;font-size:13px}.sps label{display:inline-flex;align-items:center;gap:4px;cursor:pointer}.sps input{width:16px;height:16px;accent-color:var(--ink)}
+@media (max-width:520px){header .in{padding:10px 12px;gap:6px}.logo{font-size:19px}.tag{font-size:9.5px;padding:2px 5px}.hbtns{gap:4px}.hbtn{height:30px;padding:0 9px;font-size:12px;border-radius:8px}}
 .hbtn.dark{background:var(--ink);color:#fff;border-color:var(--ink)}
 main{max-width:1180px;margin:0 auto;padding:20px 20px 60px}
 h1{font-size:26px;font-weight:900;letter-spacing:-.03em;margin:4px 0 2px}
@@ -82,7 +85,7 @@ th.n{text-align:right}
 </style>
 </head>
 <body>
-<header><div class="in"><a class="logo" href="/">FeedUp.</a><span class="tag">ADMIN</span><span class="sp"></span><a class="hbtn" href="/pt">PT 미리보기</a><button class="hbtn" id="reload" type="button">새로고침</button><a class="hbtn dark" href="/">앱으로</a></div></header>
+<header><div class="in"><a class="logo" href="/">FeedUp.</a><span class="tag">ADMIN</span><span class="sp"></span><span class="hbtns"><button class="hbtn" id="reload" type="button">새로고침</button><a class="hbtn" href="/pt">PT 앱</a><a class="hbtn dark" href="/">골프 앱</a></span></div></header>
 <main id="main"><div class="state"><p>불러오는 중…</p></div></main>
 <script>
 (function(){
@@ -138,6 +141,13 @@ function render(){
   document.querySelectorAll('[data-role]').forEach(b=>b.addEventListener('click',()=>{st.role=b.dataset.role;render();}));
   $('#sort').addEventListener('change',e=>{st.sort=e.target.value;$('#tbl').innerHTML=table();});
   $('#csv').addEventListener('click',csv);
+  loadPtFb();
+}
+async function loadPtFb(){
+  const box=document.createElement('div');box.innerHTML='<h2>PT 앱 의견 <small>PT 앱 내 정보 → 의견 보내기</small></h2><div class="tw" id="ptfb"><div class="empty">불러오는 중…</div></div>';$('#main').appendChild(box);
+  try{const r=await fetch('/api/admin/ptfeedback',{credentials:'same-origin'});const j=await r.json();const L=j.feedback||[];
+    $('#ptfb').innerHTML=L.length?'<table style="min-width:600px"><thead><tr><th>보낸 사람</th><th>날짜</th><th>내용</th></tr></thead><tbody>'+L.map(f=>'<tr><td><div class="nm">'+esc(f.name||'')+'</div><div class="em">'+esc(f.email||'')+'</div></td><td>'+ymd(f.at)+'</td><td style="white-space:pre-wrap;line-height:1.5">'+esc(f.text)+'</td></tr>').join('')+'</tbody></table>':'<div class="empty">아직 받은 의견이 없어요.</div>';}
+  catch(e){$('#ptfb').innerHTML='<div class="empty">불러오지 못했어요.</div>';}
 }
 function kpi(l,v,d,hl){return '<div class="card kpi'+(hl?' hl':'')+'"><div class="l">'+l+'</div><div class="v num">'+v+'</div>'+(d?'<div class="d">'+esc(d)+'</div>':'')+'</div>';}
 function stat(l,v,s){return '<div class="stat"><span>'+l+'</span><span><b>'+v+'</b>'+(s?'<small>'+esc(s)+'</small>':'')+'</span></div>';}
@@ -151,10 +161,11 @@ function rows(){
 function table(){
   const L=rows();
   if(!L.length)return '<div class="empty">조건에 맞는 회원이 없어요.</div>';
-  return '<table><thead><tr><th>회원</th><th>역할</th><th>사용 방식</th><th>가입일</th><th>최근 활동</th><th class="n">담당 선수</th><th class="n">연결 코치</th><th class="n">학부모</th><th class="n">연습</th><th class="n">레슨</th><th class="n">라운드</th><th class="n">피드백</th></tr></thead><tbody>'+
+  return '<table><thead><tr><th>회원</th><th>역할</th><th>종목</th><th>사용 방식</th><th>가입일</th><th>최근 활동</th><th class="n">담당 선수</th><th class="n">연결 코치</th><th class="n">학부모</th><th class="n">연습</th><th class="n">레슨</th><th class="n">라운드</th><th class="n">피드백</th></tr></thead><tbody>'+
     L.map(m=>'<tr><td><div class="nm">'+esc(m.name)+'</div><div class="em">'+esc(m.email)+'</div></td>'+
       '<td>'+m.roles.map(r=>'<span class="r '+r+'">'+RL[r]+'</span>').join('')+(m.under14?'<span class="r kid">14세 미만</span>':'')+(m.consent?'':'<span class="r warn">약관 미동의</span>')+'</td>'+
-      '<td><select class="spsel" data-id="'+esc(m.id)+'" aria-label="사용 방식 변경">'+(m.space?'':'<option value="" selected>미선택</option>')+[['academy','아카데미'],['solo','개인 · 개인 레슨']].map(o=>'<option value="'+o[0]+'"'+(m.space===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select></td>'+
+      '<td><span class="sps">'+[['golf','골프'],['pt','PT']].map(x=>'<label><input type="checkbox" class="spck" data-id="'+esc(m.id)+'" value="'+x[0]+'"'+((m.sports||['golf']).includes(x[0])?' checked':'')+'> '+x[1]+'</label>').join('')+'</span></td>'+
+      '<td>'+(!(m.sports||['golf']).includes('golf')?'<span class="muted">–</span>':'<select class="spsel" data-id="'+esc(m.id)+'" aria-label="사용 방식 변경">'+(m.space?'':'<option value="" selected>미선택</option>')+[['academy','아카데미'],['solo','개인 · 개인 레슨']].map(o=>'<option value="'+o[0]+'"'+(m.space===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>')+'</td>'+
       '<td>'+ymd(m.created)+'</td><td>'+ago(m.last)+'</td>'+
       '<td class="n">'+(m.roles.includes('coach')?m.players+(m.pending?' <span class="muted" style="font-size:12px">+'+m.pending+'</span>':''):'–')+'</td>'+
       '<td class="n">'+(m.coaches||'–')+'</td><td class="n">'+(m.parents||m.kids||'–')+'</td>'+
@@ -162,12 +173,24 @@ function table(){
 }
 function csv(){
   const L=rows(),q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
-  const head=['이름','이메일','사용 방식','역할','14세 미만','약관 동의','가입일','최근 활동','담당 선수','승인 대기','연결 코치','자녀 수','학부모 수','연습','레슨','라운드','피드백'];
-  const lines=[head.map(q).join(',')].concat(L.map(m=>[m.name,m.email,m.space==='solo'?'개인':m.space==='academy'?'아카데미':'',m.roles.map(r=>RL[r]).join('/'),m.under14?'Y':'',m.consent?'Y':'N',ymd(m.created),m.last?ymd(m.last):'',m.players,m.pending,m.coaches,m.kids,m.parents,m.logs,m.lessons,m.rounds,m.feedback].map(q).join(',')));
+  const head=['이름','이메일','종목','사용 방식','역할','14세 미만','약관 동의','가입일','최근 활동','담당 선수','승인 대기','연결 코치','자녀 수','학부모 수','연습','레슨','라운드','피드백'];
+  const lines=[head.map(q).join(',')].concat(L.map(m=>[m.name,m.email,(m.sports||['golf']).map(x=>x==='pt'?'PT':'골프').join('/'),m.space==='solo'?'개인':m.space==='academy'?'아카데미':'',m.roles.map(r=>RL[r]).join('/'),m.under14?'Y':'',m.consent?'Y':'N',ymd(m.created),m.last?ymd(m.last):'',m.players,m.pending,m.coaches,m.kids,m.parents,m.logs,m.lessons,m.rounds,m.feedback].map(q).join(',')));
   const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='feedup_members_'+dkey(Date.now())+'.csv';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
 }
 document.addEventListener('change',async e=>{
+  if(e.target.classList&&e.target.classList.contains('spck')){
+    const el=e.target,m=D.members.find(x=>x.id===el.dataset.id);if(!m)return;
+    const boxes=[...document.querySelectorAll('.spck[data-id="'+CSS.escape(el.dataset.id)+'"]')],next=boxes.filter(b=>b.checked).map(b=>b.value);
+    const prev=(m.sports||['golf']).slice();
+    if(!next.length){alert('종목은 하나 이상이어야 해요.');el.checked=true;return;}
+    const lab=x=>x.map(y=>y==='pt'?'PT':'골프').join(' · ');
+    if(!confirm(m.name+'님의 종목을 '+lab(next)+'(으)로 바꿀까요?\n기존 기록은 지워지지 않아요.')){el.checked=!el.checked;return;}
+    boxes.forEach(b=>b.disabled=true);
+    try{const r=await fetch('/api/admin/sports',{method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify({id:m.id,sports:next})});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||('오류 '+r.status));m.sports=next;$('#tbl').innerHTML=table();}
+    catch(err){alert('바꾸지 못했어요: '+err.message);boxes.forEach(b=>{b.checked=prev.includes(b.value);});}
+    boxes.forEach(b=>b.disabled=false);return;
+  }
   const el=e.target;if(!el.classList||!el.classList.contains('spsel'))return;
   const m=D.members.find(x=>x.id===el.dataset.id),label=el.options[el.selectedIndex].text;
   if(!el.value||!confirm((m?m.name:'이 회원')+'님의 사용 방식을 '+label+'(으)로 바꿀까요?\n기존 기록은 지워지지 않고, 바꾼 방식의 기록만 보이게 돼요.')){el.value=m&&m.space||'';return;}
