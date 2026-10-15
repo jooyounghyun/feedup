@@ -765,7 +765,88 @@ function uploadBlob(url,blob,type,onp){
   });
 }
 
-async function uploadPt(file,member,onp){
+function pickMime(audio){
+  const c=audio?['video/mp4;codecs=avc1,mp4a.40.2','video/mp4;codecs="avc1.42E01E, mp4a.40.2"','video/webm;codecs=vp8,opus','video/webm;codecs=vp9,opus','video/mp4','video/webm']
+    :['video/mp4;codecs=avc1.42E01E','video/mp4;codecs=avc1.4D401F','video/mp4;codecs=avc1','video/webm;codecs=vp8','video/webm;codecs=vp9','video/webm','video/mp4'];
+  return c.find(t=>{try{return MediaRecorder.isTypeSupported(t);}catch(e){return false;}})||'';
+}
+function canRecode(){return typeof MediaRecorder!=='undefined'&&typeof HTMLCanvasElement!=='undefined'&&!!HTMLCanvasElement.prototype.captureStream;}
+// 소리 녹음용 오디오 장치. 파일을 고르는 순간(사용자 터치)에 켜 둬야 휴대폰이 소리를 막지 않아요.
+let AC=null;
+function primeAudio(){try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;if(!AC)AC=new C();if(AC.state==='suspended')AC.resume();}catch(e){}}
+// 영상을 720p로 다시 만들어 용량을 줄여요. 소리(설명)도 같이 담아요.
+// 브라우저는 영상을 '재생하면서 다시 녹화'하는 방식이라 영상 길이만큼 걸려요.
+// 결과: {blob, audio:true/false} 또는 null(실패). 소리를 못 담으면 audio:false.
+function recodeVideo(file,onp,bps){
+  bps=bps||2500000;
+  return new Promise(res=>{
+    const v=document.createElement('video'),u=URL.createObjectURL(file);let finished=false,rec=null,raf=0,guard=0,audioOk=false,srcNode=null;
+    v.playsInline=true;v.setAttribute('playsinline','');v.preload='auto';v.volume=1;
+    v.style.cssText='position:fixed;left:0;top:0;width:4px;height:4px;opacity:0.01;pointer-events:none;z-index:-1';
+    const done=b=>{if(finished)return;finished=true;cancelAnimationFrame(raf);clearTimeout(guard);try{v.pause();v.remove();}catch(e){}try{srcNode&&srcNode.disconnect();}catch(e){}URL.revokeObjectURL(u);res(b?{blob:b,audio:audioOk}:null);};
+    v.onerror=()=>done(null);
+    v.onloadedmetadata=async()=>{
+      try{
+        const M=720,vw=v.videoWidth||720,vh=v.videoHeight||1280,sc=Math.min(1,M/Math.max(vw,vh));
+        const w=Math.max(2,Math.round(vw*sc/2)*2),h=Math.max(2,Math.round(vh*sc/2)*2);
+        const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');
+        g.fillStyle='#000';g.fillRect(0,0,w,h);
+        const stream=c.captureStream(30);
+        // 소리: 영상 소리를 스피커 대신 녹음기로만 보내요(재생 중에 소리가 나지 않아요)
+        if(AC&&AC.createMediaStreamDestination){
+          try{if(AC.state==='suspended')await AC.resume();srcNode=AC.createMediaElementSource(v);const dest=AC.createMediaStreamDestination();srcNode.connect(dest);
+            const z=AC.createGain();z.gain.value=0;srcNode.connect(z);z.connect(AC.destination);
+            dest.stream.getAudioTracks().forEach(t=>stream.addTrack(t));audioOk=dest.stream.getAudioTracks().length>0;}catch(e){audioOk=false;}
+        }
+        if(!audioOk)v.muted=true;
+        try{await v.play();}catch(e){
+          // 휴대폰이 소리 있는 재생을 막으면: 소리 없이 다시 시도하고, 결과에 소리 없음 표시
+          if(!audioOk)throw e;audioOk=false;stream.getAudioTracks().forEach(t=>{stream.removeTrack(t);});v.muted=true;await v.play();
+        }
+        v.pause();v.currentTime=0;
+        const mime=pickMime(audioOk);
+        const opt={videoBitsPerSecond:bps};if(audioOk)opt.audioBitsPerSecond=96000;if(mime)opt.mimeType=mime;
+        rec=new MediaRecorder(stream,opt);
+        const chunks=[];rec.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data);};
+        rec.onstop=()=>{const type=((rec.mimeType||mime||'video/webm').split(';')[0])||'video/webm';const b=new Blob(chunks,{type});done(b.size>20000?b:null);};
+        const draw=()=>{try{g.drawImage(v,0,0,w,h);}catch(e){}if(onp&&v.duration)onp(Math.min(1,v.currentTime/v.duration));if(!v.ended)raf=requestAnimationFrame(draw);};
+        v.onended=()=>{try{g.drawImage(v,0,0,w,h);}catch(e){}setTimeout(()=>{if(rec.state!=='inactive')rec.stop();},200);};
+        rec.start(250);
+        await v.play();
+        draw();
+        guard=setTimeout(()=>{try{if(rec.state!=='inactive')rec.stop();else done(null);}catch(e){done(null);}},((v.duration||10)+8)*1000);
+      }catch(e){try{if(rec&&rec.state!=='inactive')rec.stop();}catch(x){}done(null);}
+    };
+    document.body.appendChild(v);v.src=u;try{v.load();}catch(e){}
+  });
+}
+// 소리를 지키려고 원본을 올릴 때: 20MB씩 나눠 올려요(최대 400MB)
+function putChunk(url,blob,onp){
+  return new Promise((res,rej)=>{
+    const x=new XMLHttpRequest();x.open('PUT',url);x.withCredentials=true;x.timeout=180000;x.setRequestHeader('content-type','application/octet-stream');
+    x.upload.onprogress=e=>{if(e.lengthComputable&&onp)onp(e.loaded/e.total);};
+    x.onload=()=>{let j={};try{j=JSON.parse(x.responseText);}catch(e){}if(x.status>=200&&x.status<300)res(j);else{const er=new Error(j.error||('올리지 못했어요 (오류 '+x.status+')'));er.http=x.status;rej(er);}};
+    x.onerror=x.ontimeout=()=>rej(new Error('인터넷 연결이 불안정해서 올리지 못했어요. 와이파이에서 다시 시도해 주세요.'));
+    x.send(blob);
+  });
+}
+async function uploadBig(file,type,info,say){
+  const st=await API.req('/upload/start',{method:'POST',body:Object.assign({type,size:file.size},info)});
+  const P=st.partSize,n=Math.ceil(file.size/P),parts=[];
+  try{
+    for(let i=0;i<n;i++){
+      const chunk=file.slice(i*P,Math.min(file.size,(i+1)*P));let r=null;
+      for(let t=0;t<3&&!r;t++){
+        try{r=await putChunk('/api/upload/part?key='+encodeURIComponent(st.key)+'&uploadId='+encodeURIComponent(st.uploadId)+'&n='+(i+1),chunk,p=>say('원본 올리는 중 '+Math.round((i+p)/n*100)+'%'));}
+        catch(e){if(t===2||e.http===403)throw e;say('다시 시도 중…');await new Promise(z=>setTimeout(z,1500));}
+      }
+      parts.push({partNumber:r.partNumber,etag:r.etag});
+    }
+    return await API.req('/upload/done',{method:'POST',body:{key:st.key,uploadId:st.uploadId,parts}});
+  }catch(e){API.req('/upload/done',{method:'POST',body:{key:st.key,uploadId:st.uploadId,abort:true}}).catch(()=>{});throw e;}
+}
+async function uploadPt(file,member,onp,say){
+  say=say||(()=>{});
   const name=(file.name||'').toLowerCase();
   let type=(file.type||'').toLowerCase();
   if(!type)type=/\.mov$/.test(name)?'video/quicktime':/\.(mp4|m4v)$/.test(name)?'video/mp4':/\.webm$/.test(name)?'video/webm':/\.(jpe?g)$/.test(name)?'image/jpeg':/\.png$/.test(name)?'image/png':/\.(heic|heif)$/.test(name)?'image/heic':'';
@@ -774,8 +855,17 @@ async function uploadPt(file,member,onp){
   else if(type.startsWith('video/')){
     if(type==='video/x-m4v')type='video/mp4';
     if(!/^video\/(mp4|quicktime|webm)$/.test(type))throw new Error('mp4나 mov 영상만 올릴 수 있어요.');
-    if(file.size>40*1024*1024)throw new Error('영상 용량이 너무 커요. 40MB 이하(1분 이내)로 올려 주세요.');
-    const d=await videoDuration(file);if(d&&d>61)throw new Error('영상은 1분 이내로 올려 주세요.');
+    say('영상 확인 중…');
+    const d=await videoDuration(file);if(d&&d>61)throw new Error('1분 이내 영상만 올릴 수 있어요. 지금 영상은 '+Math.round(d)+'초예요. 사진 앱에서 잘라서 올려 주세요.');
+    let small=null;
+    // 소리까지 담아 줄일 수 있을 때만 압축본을 써요. 아니면 원본(소리 그대로)을 올려요.
+    if(canRecode()){say('영상 줄이는 중 0% · 화면을 켜 두세요');const r=await recodeVideo(file,p=>say('영상 줄이는 중 '+Math.round(p*100)+'% · 화면을 켜 두세요'),d&&d>20?1800000:2500000);
+      if(r&&r.audio&&r.blob.size<file.size)small=r.blob;}
+    if(small){blob=small;type=(small.type||'video/webm').split(';')[0];}
+    else{
+      if(file.size>400*1024*1024)throw new Error('영상 용량이 너무 커요('+Math.round(file.size/1048576)+'MB). 카메라 화질을 1080p로 낮춰 찍거나 영상을 더 짧게 잘라 주세요.');
+      if(file.size>40*1024*1024)return await uploadBig(file,type,{kind:'pt',member},say);
+    }
   }else throw new Error('사진이나 영상만 올릴 수 있어요.');
   return await uploadBlob('/api/ptmedia?member='+encodeURIComponent(member),blob,type,onp);
 }
@@ -795,7 +885,8 @@ async function onFile(file,ctx){
   if(ctx==='body')member=top.m;
   S.up={ctx,msg:'준비 중…'};render();
   try{
-    const r=await uploadPt(file,member,p=>{S.up.msg='올리는 중… '+Math.round(p*100)+'%';const el=document.getElementById('upmsg');if(el)el.textContent=S.up.msg;});
+    const say=m=>{S.up.msg=m;const el=document.getElementById('upmsg');if(el)el.textContent=m;};
+    const r=await uploadPt(file,member,p=>say('올리는 중 '+Math.round(p*100)+'%'),say);
     if(ctx==='session'){top.s.media=top.s.media||[];top.s.media.push({key:r.key,type:r.type});top.newKeys=(top.newKeys||[]).concat(r.key);}
     else if(ctx==='log'){const [id,l]=curLog(),it=l.items[top.i];l.media=(l.media||[]).concat({key:r.key,type:r.type,ex:it?it.ex:''});saveLog(id,l,true);toast('트레이너가 볼 수 있게 올렸어요.');}
     else if(ctx==='body'){if(r.type!=='image'){API.req('/media/'+r.key,{method:'DELETE'}).catch(()=>{});throw new Error('눈바디는 사진만 올릴 수 있어요.');}if(top.key&&top.fresh)API.req('/media/'+top.key,{method:'DELETE'}).catch(()=>{});top.key=r.key;top.fresh=true;}
@@ -1028,7 +1119,7 @@ document.addEventListener('input',e=>{
   if(f==='ca'||f==='cb'){top[f==='ca'?'a':'b']=el.value;render();return;}
   if(f==='cmp'){const c=document.getElementById('cmp');if(c)c.style.setProperty('--x',el.value+'%');return;}if(f==='fbapp'){top.text=el.value;return;}
 });
-document.addEventListener('change',e=>{const el=e.target;if(el.dataset&&el.dataset.f==='mfile'){const f=el.files&&el.files[0];const c=el.dataset.c;el.value='';if(f)onFile(f,c);}});
+document.addEventListener('change',e=>{const el=e.target;if(el.dataset&&el.dataset.f==='mfile'){const f=el.files&&el.files[0];const c=el.dataset.c;el.value='';if(f){primeAudio();onFile(f,c);}}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&S.ov.length)pop();if(e.key==='Enter'&&e.target.dataset&&['email','pw','name'].includes(e.target.dataset.f)){const b=document.querySelector('[data-a="auth"]');if(b)b.click();}});
 async function refresh(){if(!USER||!Store.ready||S.ov.length||document.hidden)return;try{await Store.chain;await Store.load();render();}catch(e){}}
 setInterval(refresh,45000);

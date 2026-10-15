@@ -294,13 +294,20 @@ async function write(env, ME, b) {
     }
     case 'feedback': {
       if (!id.startsWith(ME + '__')) return deny();
-      if (del) { await delDoc(env, col, id); return J({ ok: true }); }
+      const cur = await getDoc(env, col, id);
+      const curKeys = ((cur && cur.media) || []).map((m) => m.key);
+      if (del) { await removeMedia(env, curKeys); await delDoc(env, col, id); return J({ ok: true }); }
       const playerId = str(data.playerId, 60), kind = ['round', 'lesson'].includes(data.kind) ? data.kind : 'log', ref = str(data.ref, 120);
       if (id !== ME + '__' + kind + '__' + ref) return deny();
       if (!(await isActivePlayer(env, ME, playerId))) return fail('연결된 선수에게만 피드백할 수 있어요.', 403);
+      // 피드백 사진·영상: fb/<선수>/<코치>/ 아래 파일만 받아요
+      const pfx = 'fb/' + playerId + '/' + ME + '/';
+      const media = (Array.isArray(data.media) ? data.media : []).filter((m) => m && typeof m.key === 'string' && m.key.startsWith(pfx) && !m.key.includes('..') && ['image', 'video'].includes(m.type)).slice(0, 6).map((m) => ({ key: m.key, type: m.type }));
+      const keep = new Set(media.map((m) => m.key));
+      await removeMedia(env, curKeys.filter((k) => !keep.has(k)));
       await putDoc(env, col, id, {
         coachId: ME, playerId, kind, ref, date: isDate(data.date) ? data.date : '',
-        text: str(data.text, 3000), at: Date.now(),
+        text: str(data.text, 3000), media, at: Date.now(),
       }, { coach: ME, player: playerId });
       return J({ ok: true });
     }
@@ -511,11 +518,21 @@ async function mediaPut(req, env, ME, url) {
   return J({ key, type: isImg ? 'image' : 'video' });
 }
 // PT 사진·영상: pt/<회원>/<올린 사람>/<파일> — 회원 본인과 연결된 트레이너만 올리고 볼 수 있어요.
+// 골프 코치 피드백 사진·영상: fb/<선수>/<코치>/<파일> — 선수와 연결된 코치만 올려요
+async function fbMediaPut(req, env, ME, url) {
+  const player = str(url.searchParams.get('player') || '', 60);
+  if (!/^u_[a-z0-9]{4,40}$/.test(player) || !(await isActivePlayer(env, ME, player))) return fail('연결된 선수에게만 보낼 수 있어요.', 403);
+  return await mediaPutAt(req, env, 'fb/' + player + '/' + ME + '/');
+}
 async function ptMediaPut(req, env, ME, url) {
   if (!env.MEDIA) return fail('사진·영상 저장소가 아직 설정되지 않았어요.', 503);
   const member = str(url.searchParams.get('member') || ME, 60);
   if (!/^u_[a-z0-9]{4,40}$/.test(member)) return fail('회원 정보가 올바르지 않아요.');
   if (member !== ME && !(await isActivePt(env, ME, member))) return fail('권한이 없어요.', 403);
+  return await mediaPutAt(req, env, 'pt/' + member + '/' + ME + '/');
+}
+async function mediaPutAt(req, env, prefix) {
+  if (!env.MEDIA) return fail('사진·영상 저장소가 아직 설정되지 않았어요.', 503);
   const ct = (req.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
   const isImg = !!IMG_TYPES[ct], isVid = !!VID_TYPES[ct];
   if (!isImg && !isVid) return fail('사진(jpg, png) 또는 영상(mp4, mov) 파일만 올릴 수 있어요.');
@@ -523,14 +540,69 @@ async function ptMediaPut(req, env, ME, url) {
   if (+(req.headers.get('content-length') || 0) > max) return fail(isImg ? '사진 용량이 너무 커요.' : '영상 용량이 너무 커요. 40MB 이하로 올려 주세요.', 413);
   const buf = await req.arrayBuffer();
   if (!buf.byteLength || buf.byteLength > max) return fail('파일 용량을 확인해 주세요.', 413);
-  const key = 'pt/' + member + '/' + ME + '/' + rand(8) + '.' + (IMG_TYPES[ct] || VID_TYPES[ct]);
+  const key = prefix + rand(8) + '.' + (IMG_TYPES[ct] || VID_TYPES[ct]);
   await env.MEDIA.put(key, buf, { httpMetadata: { contentType: ct } });
   return J({ key, type: isImg ? 'image' : 'video' });
+}
+/* 큰 영상(원본) 나눠 올리기: 소리를 지키려고 압축 못 한 원본을 20MB씩 나눠 R2에 올려요 */
+const BIG_MAX = 400 * 1024 * 1024, PART = 20 * 1024 * 1024;
+async function bigStart(env, ME, b) {
+  if (!env.MEDIA) return fail('사진·영상 저장소가 아직 설정되지 않았어요.', 503);
+  const ct = str(b.type, 40).toLowerCase();
+  if (!VID_TYPES[ct]) return fail('mp4나 mov 영상만 올릴 수 있어요.');
+  if (!(+b.size > 0) || +b.size > BIG_MAX) return fail('영상 용량이 너무 커요. 400MB 이하로 올려 주세요.', 413);
+  let key;
+  if (b.kind === 'fb') {
+    const player = str(b.player || '', 60);
+    if (!/^u_[a-z0-9]{4,40}$/.test(player) || !(await isActivePlayer(env, ME, player))) return fail('연결된 선수에게만 보낼 수 있어요.', 403);
+    key = 'fb/' + player + '/' + ME + '/' + rand(8) + '.' + VID_TYPES[ct];
+  } else if (b.kind === 'pt') {
+    const member = str(b.member || ME, 60);
+    if (!/^u_[a-z0-9]{4,40}$/.test(member)) return fail('회원 정보가 올바르지 않아요.');
+    if (member !== ME && !(await isActivePt(env, ME, member))) return fail('권한이 없어요.', 403);
+    key = 'pt/' + member + '/' + ME + '/' + rand(8) + '.' + VID_TYPES[ct];
+  } else {
+    const lessonId = str(b.lesson, 50);
+    if (!/^l[a-z0-9]{4,40}$/.test(lessonId)) return fail('레슨 정보가 올바르지 않아요.');
+    const cur = await getDoc(env, 'lessons', lessonId);
+    const owner = str(b.player || ME, 60);
+    if (owner === ME) { if (cur && (cur.author === 'coach' || cur.playerId !== ME)) return fail('권한이 없어요.', 403); }
+    else {
+      if (!(await isActivePlayer(env, ME, owner))) return fail('권한이 없어요.', 403);
+      if (cur && (cur.author !== 'coach' || cur.coachId !== ME || cur.playerId !== owner)) return fail('권한이 없어요.', 403);
+    }
+    key = 'lessons/' + owner + '/' + lessonId + '/' + rand(8) + '.' + VID_TYPES[ct];
+  }
+  const mpu = await env.MEDIA.createMultipartUpload(key, { httpMetadata: { contentType: ct } });
+  await putDoc(env, 'uploads', mpu.uploadId.slice(0, 180), { key, by: ME, size: +b.size, at: Date.now() }, { owner: ME });
+  return J({ key, uploadId: mpu.uploadId, partSize: PART });
+}
+async function bigCheck(env, ME, uploadId, key) {
+  const d = await getDoc(env, 'uploads', String(uploadId || '').slice(0, 180));
+  return d && d.by === ME && d.key === key ? d : null;
+}
+async function bigPart(req, env, ME, url) {
+  const key = url.searchParams.get('key') || '', uploadId = url.searchParams.get('uploadId') || '', n = +url.searchParams.get('n');
+  if (!(n >= 1 && n <= 40) || !(await bigCheck(env, ME, uploadId, key))) return fail('권한이 없어요.', 403);
+  const buf = await req.arrayBuffer();
+  if (!buf.byteLength || buf.byteLength > PART) return fail('조각 크기가 올바르지 않아요.', 413);
+  const part = await env.MEDIA.resumeMultipartUpload(key, uploadId).uploadPart(n, buf);
+  return J({ partNumber: part.partNumber, etag: part.etag });
+}
+async function bigDone(env, ME, b) {
+  const key = str(b.key, 200), uploadId = str(b.uploadId, 400);
+  if (!(await bigCheck(env, ME, uploadId, key))) return fail('권한이 없어요.', 403);
+  const up = env.MEDIA.resumeMultipartUpload(key, uploadId);
+  await delDoc(env, 'uploads', uploadId.slice(0, 180));
+  if (b.abort) { try { await up.abort(); } catch (e) {} return J({ ok: true }); }
+  const parts = (Array.isArray(b.parts) ? b.parts : []).map((p) => ({ partNumber: +p.partNumber, etag: str(p.etag, 200) })).sort((a, c) => a.partNumber - c.partNumber);
+  await up.complete(parts);
+  return J({ key, type: 'video' });
 }
 async function mediaGet(req, env, ME, key) {
   if (!env.MEDIA) return fail('사진·영상 저장소가 아직 설정되지 않았어요.', 503);
   const parts = key.split('/');
-  if (parts.length !== 4 || !['lessons', 'pt'].includes(parts[0]) || key.includes('..')) return fail('없는 파일이에요.', 404);
+  if (parts.length !== 4 || !['lessons', 'pt', 'fb'].includes(parts[0]) || key.includes('..')) return fail('없는 파일이에요.', 404);
   if (parts[0] === 'pt') { if (parts[1] !== ME && !(await isActivePt(env, ME, parts[1]))) return fail('권한이 없어요.', 403); }
   else if (!(await canSeePlayer(env, ME, parts[1]))) return fail('권한이 없어요.', 403);
   const hasRange = !!req.headers.get('range');
@@ -553,7 +625,7 @@ async function mediaGet(req, env, ME, key) {
 }
 async function mediaDelete(env, ME, key) {
   const parts = key.split('/');
-  if (parts.length === 4 && parts[0] === 'pt' && !key.includes('..')) {
+  if (parts.length === 4 && (parts[0] === 'pt' || parts[0] === 'fb') && !key.includes('..')) {
     if (parts[2] !== ME) return fail('직접 올린 파일만 지울 수 있어요.', 403);
     await removeMedia(env, [key]); return J({ ok: true });
   }
@@ -582,7 +654,10 @@ async function deleteAccount(req, env, user) {
   if (!u || !same(await hashPw(String(b.password || ''), u.salt), u.pass_hash)) return fail('비밀번호가 맞지 않아요.', 401);
   const ME = 'u_' + user.id;
   if (env.MEDIA) {
-    for (const prefix of ['lessons/' + ME + '/', 'pt/' + ME + '/']) {
+    // 내가 코치로 보낸 피드백 사진·영상도 지워요
+    const myFb = (await env.DB.prepare("SELECT data FROM docs WHERE col='feedback' AND coach=?").bind(ME).all()).results || [];
+    await removeMedia(env, myFb.flatMap((r) => (JSON.parse(r.data).media || []).map((m) => m.key)).filter((k) => typeof k === 'string' && k.startsWith('fb/')));
+    for (const prefix of ['lessons/' + ME + '/', 'pt/' + ME + '/', 'fb/' + ME + '/']) {
       let cursor;
       do {
         const l = await env.MEDIA.list({ prefix, cursor });
@@ -794,6 +869,10 @@ export async function onRequest({ request: req, env, params }) {
     if (path === '/consent' && m === 'POST') return await giveConsent(env, ME, await body(req));
     if (path === '/account/delete' && m === 'POST') return await deleteAccount(req, env, user);
     if (path === '/media' && m === 'POST') return await mediaPut(req, env, ME, new URL(req.url));
+    if (path === '/upload/start' && m === 'POST') return await bigStart(env, ME, await body(req));
+    if (path === '/upload/part' && m === 'PUT') return await bigPart(req, env, ME, new URL(req.url));
+    if (path === '/upload/done' && m === 'POST') return await bigDone(env, ME, await body(req));
+    if (path === '/fbmedia' && m === 'POST') return await fbMediaPut(req, env, ME, new URL(req.url));
     if (path === '/ptmedia' && m === 'POST') return await ptMediaPut(req, env, ME, new URL(req.url));
     if (path.startsWith('/media/') && (m === 'GET' || m === 'HEAD')) return await mediaGet(req, env, ME, decodeURIComponent(path.slice(7)));
     if (path.startsWith('/media/') && m === 'DELETE') return await mediaDelete(env, ME, decodeURIComponent(path.slice(7)));
