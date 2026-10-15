@@ -13,6 +13,7 @@
   "r2_buckets": [
     { "binding": "MEDIA", "bucket_name": "feedup-media" }
   ],
+  "triggers": { "crons": ["0 5 * * *"] },
   "keep_vars": true,
   "observability": { "enabled": true }
 }

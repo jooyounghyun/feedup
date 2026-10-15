@@ -181,6 +181,9 @@ textarea:focus,.inp:focus{border-color:var(--ink)}
 .viewer img,.viewer video{max-width:100%;max-height:100vh;display:block}
 .vclose{position:absolute;top:calc(12px + env(safe-area-inset-top));right:12px;width:44px;height:44px;border-radius:22px;background:rgba(255,255,255,.18);color:#fff;font-size:26px;z-index:2}
 .pill[disabled],.btn[disabled],.ibtn[disabled]{opacity:.4;pointer-events:none}
+
+.remind{background:var(--ink);color:#fff;border-radius:16px;padding:13px 16px}
+.remind b{display:block;font-size:15px}.remind small{display:block;opacity:.75;font-size:12.5px;margin-top:2px}
 </style>
 </head>
 <body>
@@ -371,10 +374,52 @@ function vGolfAccount(){
 function ensureLog(d){const id=logId(ME,d);let l=Store.data.ptdocs[id];if(!l){l={kind:'log',memberId:ME,date:d,items:[],feel:'',submitted:false};}return [id,JSON.parse(JSON.stringify(l))];}
 let saveT={};
 function saveLog(id,l,now){Store.data.ptdocs[id]=Object.assign({},l,{author:ME});clearTimeout(saveT[id]);const go=()=>Store.set(id,{kind:'log',memberId:ME,date:l.date,items:l.items,feel:l.feel||'',submitted:!!l.submitted,submittedAt:l.submittedAt||null,media:l.media||[]});if(now)go();else saveT[id]=setTimeout(go,700);}
+/* ---------- 수업 하루 전 알림 ---------- */
+function hm(t){const m=/^(\d{2}):(\d{2})$/.exec(t||'');if(!m)return t||'';const h=+m[1];return (h<12?'오전 ':'오후 ')+((h%12)||12)+'시'+(m[2]!=='00'?' '+(+m[2])+'분':'');}
+function classBanner(){
+  const n=nextClass(ME);if(!n)return '';const t=today(),w=n.date===t?'오늘':n.date===addD(t,1)?'내일':'';if(!w)return '';
+  return '<div class="remind"><b>'+w+' '+hm(n.time)+' PT 수업이 있어요</b><small>'+esc(tName(n.author))+(n.memo?' · '+esc(n.memo):'')+'</small></div>';
+}
+const PUSH={
+  ok:()=>'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window&&location.protocol==='https:',
+  ios:()=>/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1),
+  home:()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true,
+  st:null,
+  async check(){
+    if(!PUSH.ok()){PUSH.st=PUSH.ios()&&!PUSH.home()?'ios':'no';return;}
+    if(Notification.permission==='denied'){PUSH.st='denied';return;}
+    try{const r=await navigator.serviceWorker.getRegistration();const sub=r&&await r.pushManager.getSubscription();PUSH.st=sub&&Notification.permission==='granted'?'on':'off';}catch(e){PUSH.st='off';}
+  },
+  async on(){
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){PUSH.st=perm==='denied'?'denied':'off';throw new Error('알림을 허용해야 받을 수 있어요.');}
+    const reg=await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;
+    const {key}=await API.req('/push/key');
+    const raw=atob(key.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-key.length%4)%4));
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:Uint8Array.from(raw,c=>c.charCodeAt(0))});
+    await API.req('/push/sub',{method:'POST',body:{sub:sub.toJSON()}});PUSH.st='on';
+  },
+  async off(){
+    const r=await navigator.serviceWorker.getRegistration();const sub=r&&await r.pushManager.getSubscription();
+    if(sub){await API.req('/push/unsub',{method:'POST',body:{endpoint:sub.endpoint}}).catch(()=>{});await sub.unsubscribe();}PUSH.st='off';
+  },
+  card(){
+    const st=PUSH.st;if(!st)PUSH.check().then(render);
+    const t='<b style="font-size:14.5px">수업 하루 전 알림</b><div class="ds" style="margin:2px 0 10px;font-size:12.5px">수업 전날 오후 2시에 휴대폰으로 알려 드려요</div>';
+    const note=x=>'<div class="card pad">'+t+'<p class="ds" style="margin:0;font-size:13px;line-height:1.6">'+x+'</p></div>';
+    if(st==='on')return '<div class="card pad">'+t+'<div style="display:flex;gap:8px"><span class="badge b-blue" style="align-self:center">켜짐</span><button class="pill" data-a="pushtest">알림 테스트</button><button class="pill" data-a="pushoff">끄기</button></div></div>';
+    if(st==='ios')return note('아이폰은 사파리에서 <b>공유 버튼 → 홈 화면에 추가</b>를 한 다음, 홈 화면의 FeedUp으로 열어야 알림을 켤 수 있어요. 알림이 없어도 앱을 열면 수업 안내가 보여요.');
+    if(st==='denied')return note('이 기기에서 알림이 막혀 있어요. 휴대폰 설정 → 알림(또는 브라우저 사이트 설정)에서 FeedUp 알림을 허용해 주세요.');
+    if(st==='no')return note('이 브라우저는 알림을 지원하지 않아요. 크롬이나 삼성 인터넷에서 열어 주세요.');
+    return '<div class="card pad">'+t+'<button class="btn" data-a="pushon">'+(st===null?'확인 중…':'알림 켜기')+'</button></div>';
+  }
+};
 function vToday(){
   let h='<div class="seg" style="align-self:flex-start"><button class="'+(S.view==='workout'?'on':'')+'" data-a="view" data-v="workout">운동</button><button class="'+(S.view==='diet'?'on':'')+'" data-a="view" data-v="diet">식단</button></div>';
   const d=S.date,t=today(),dt=pd(d);
   const nav='<div style="display:flex;align-items:center;gap:4px"><button class="ibtn" data-a="day" data-v="-1" aria-label="이전 날">‹</button>'+(d!==t?'<button class="pill" data-a="day" data-v="0">오늘</button>':'')+'<button class="ibtn" data-a="day" data-v="1" aria-label="다음 날"'+(d>=t?' disabled style="opacity:.3"':'')+'>›</button></div>';
+  h=classBanner()+h;
   if(S.view==='diet')return h+vDiet(nav);
   const l=logOf(ME,d),items=(l&&l.items)||[],done=items.filter(isDone).length,hw=hwFor(ME,d);
   h+='<div class="hero"><div><div class="big num">'+md(d)+'</div><div class="sub">'+WD[dt.getDay()]+'요일'+(d===t?', 오늘':'')+'</div></div><div style="text-align:right">'+nav+'<div class="num" style="font-size:38px;font-weight:800;line-height:1;margin-top:4px">'+done+'<span style="font-size:20px;color:#8E929B">/'+items.length+'</span></div><div class="sub" style="font-size:12px;margin-top:2px">완료한 운동</div></div></div>';
@@ -497,6 +542,7 @@ function vMe(){
   h+='<h2>내 트레이너</h2><div class="card" style="padding:4px 14px">'+(mine.length?mine.map(l=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line2)"><span style="font-weight:700">'+esc(pName(l.coachId))+(l.status==='pending'?' <span class="badge b-warn">승인 대기</span>':'')+'</span><button class="lnk" style="color:var(--bad)" data-a="unlink" data-v="'+l.id+'">'+(l.status==='pending'?'요청 취소':'연결 해제')+'</button></div>').join(''):'<p class="ds" style="padding:8px 0">연결된 트레이너가 없어요.</p>')+'</div>';
   h+='<div style="display:flex;gap:8px"><input class="inp" data-f="joincode" value="'+esc(S.drafts.joincode||'')+'" placeholder="트레이너에게 받은 코드 6자리" maxlength="8" autocapitalize="characters" style="height:46px"><button class="pill on" data-a="join" style="flex-shrink:0">연결 요청</button></div>';
   h+='<h2>트레이너 기능</h2><div class="card pad">'+(trainerOn()?'<p class="ds" style="margin:0 0 10px">트레이너 기능을 쓰고 있어요. 위쪽 버튼으로 회원 / 트레이너 화면을 바꿀 수 있어요.</p>'+codeCard(true):'<p class="ds" style="margin:0 0 10px;font-size:13.5px;line-height:1.6">회원을 가르치고 있다면 트레이너 기능을 켜세요. 초대 코드가 만들어지고, 연결된 회원의 운동·식단·인바디를 보고 수업 기록과 피드백을 남길 수 있어요.</p><button class="btn" data-a="starttrainer">트레이너 시작하기</button>')+'</div>';
+  h+='<h2>휴대폰 알림</h2>'+PUSH.card();
   h+='<h2>의견 보내기</h2><div class="card pad"><p class="ds" style="margin:0 0 10px;font-size:13.5px">써 보시고 불편한 점이나 있었으면 하는 기능을 알려 주세요.</p><button class="btn ghost" data-a="open" data-v="feedback">의견 보내기</button></div>';
   if(hasGolf())h+='<h2>종목</h2><div class="card pad" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><span style="font-weight:700;font-size:14px">골프 · PT를 함께 쓰고 있어요</span><button class="pill on" data-a="gogolf" style="flex-shrink:0">골프로 가기</button></div>';
   h+='<div class="ds" style="text-align:center;margin-top:6px">'+esc(USER&&USER.email||'')+'</div><button class="btn ghost" data-a="logout">로그아웃</button>';
@@ -985,6 +1031,9 @@ document.addEventListener('click',async e=>{
       S.busy=false;render();break;}
     case'consent':if(!agOk()){S.err='필수 항목에 모두 동의해 주세요.';render();break;}try{await API.req('/consent',{method:'POST',body:{agree:S.ag}});await Store.load();S.err='';}catch(err){S.err=err.message;}render();break;
     case'logout':if(!confirm('로그아웃할까요?'))break;try{await API.req('/auth/logout',{method:'POST'});}catch(x){}location.reload();break;
+    case'pushon':try{await PUSH.on();toast('알림을 켰어요. 수업 전날 오후 2시에 알려 드려요.');}catch(err){toast(err.message||'알림을 켜지 못했어요.');}render();break;
+    case'pushoff':try{await PUSH.off();toast('알림을 껐어요.');}catch(err){}render();break;
+    case'pushtest':try{await API.req('/push/test',{method:'POST'});toast('테스트 알림을 보냈어요.');}catch(err){toast(err.message);}break;
     case'gogolf':try{localStorage.setItem('fu_sport','"golf"');}catch(x){}location.href='/';break;
     case'mode':S.mode=v;try{localStorage.setItem('fu_pt_mode',JSON.stringify(v));}catch(x){}S.tab=null;S.ov=[];render();window.scrollTo(0,0);break;
     case'tab':S.tab=v;S.q='';render();window.scrollTo(0,0);break;

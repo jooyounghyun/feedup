@@ -443,6 +443,14 @@ label.mitem{cursor:pointer;border:1.5px dashed var(--line);background:var(--card
 .phcta .link{color:var(--green);font-weight:700;font-size:13px;padding:0;white-space:nowrap}
 .hwcard{border-left:4px solid var(--green)}
 .fbo{font-size:12.5px;color:var(--muted);margin-top:8px}
+
+.remind{display:flex;gap:12px;align-items:center;background:var(--ink);color:var(--paper);border-radius:16px;padding:13px 16px;margin:4px 0 14px}
+.remind .rb{display:flex;width:34px;height:34px;border-radius:17px;background:color-mix(in srgb,var(--paper) 16%,transparent);align-items:center;justify-content:center;flex-shrink:0}
+.remind .rb svg{width:18px;height:18px}
+.remind b{display:block;font-size:15px}.remind small{display:block;opacity:.75;font-size:12.5px;margin-top:2px}
+.gcform .k{font-size:12.5px;font-weight:700;color:var(--muted,#5B616E);margin:10px 0 6px}.gcform .k:first-child{margin-top:0}
+.gcdt{display:grid;grid-template-columns:1fr 1fr;gap:8px}.gcdt input{width:100%;box-sizing:border-box;height:48px;border:1px solid var(--line);border-radius:12px;padding:0 12px;font:inherit;font-size:15px;background:var(--card);color:var(--ink)}
+.prow .rbtn{white-space:nowrap;flex-shrink:0}
 </style>
 </head>
 <body>
@@ -513,7 +521,7 @@ function shotSummaryOf(t,third,withMental){
 const roundTags=r=>roundShots(r).concat((r.misses||[]).filter(isMental));
 const isGood=m=>m===GOOD||/:굿$/.test(m);
 const goodCat=m=>m===GOOD?'기타':CATL(m.split(':')[0]);
-const COLS=['profiles','links','codes','drills','logs','rounds','feedback','reports','lessons','parents','pcodes','consents','homework'];
+const COLS=['profiles','links','codes','drills','logs','rounds','feedback','reports','lessons','parents','pcodes','consents','homework','gclass'];
 const SOLO_DRILLS=[{id:'s1',name:'',target:''},{id:'s2',name:'',target:''},{id:'s3',name:'',target:''}];
 const SPACES={academy:{label:'아카데미',chip:'ACADEMY',desc:'코치·선수·학부모가 함께 쓰는 팀 관리',tags:['연습 체크','레슨','라운드','시합']},solo:{label:'개인 · 개인 레슨',chip:'개인',desc:'혼자 연습하거나, 개인 강사에게 1:1로 레슨받는 선수',tags:['연습 체크','레슨','라운드']}};
 const SOLO=()=>S.space==='solo';
@@ -618,6 +626,7 @@ const S={
   reportPlayer:null,inboxFilter:'pending',inboxPlayer:'all',
   round:null,roundRO:false,roundSnap:null,hole:0,
   space:null,hwEdit:null,hwSnap:null,
+  fbm:{},fbUp:null,fbNew:[],
   lesson:null,lessonSnap:null,mediaMsg:'',upMsg:'',uploading:0,newKeys:[],viewer:null,rkind:'all',lessonPlayer:'all',child:null,
   loading:true,drafts:{},dd:{},dlg:null,defaultName:'',ag:{},termsView:null,withdraw:false,authMode:'login',authBusy:false,authErr:'',
   ai:{busy:false,key:null,text:''}
@@ -697,7 +706,7 @@ function fbsFor(kind,ref,playerId){
   return all.filter(f=>f.coachId===ME||share);
 }
 function fbHtml(list){
-  return list.map(f=>'<div class="fb"><div class="who2">'+I.coach+esc(f.coachId===ME?'내 피드백':cName(f.coachId)+'')+'</div><p>'+esc(f.text)+'</p></div>').join('');
+  return list.map(f=>'<div class="fb"><div class="who2">'+I.coach+esc(f.coachId===ME?'내 피드백':cName(f.coachId)+'')+'</div>'+(f.text?'<p>'+esc(f.text)+'</p>':'')+fbMediaView(f.media)+'</div>').join('');
 }
 
 /* ---------- rounds ---------- */
@@ -786,7 +795,9 @@ function tabbar(){
 
 /* ---------- onboarding ---------- */
 function agOk(){const a=S.ag;if(!a.terms||!a.privacy||!a.overseas)return false;if(a.age==='14+')return true;if(a.age==='u14')return !!((a.gname||'').trim()&&(a.gphone||'').replace(/[^0-9]/g,'').length>=9&&a.gok);return false;}
-function authReady(){const su=S.authMode==='signup',D=S.drafts;return !!((D.email||'').trim()&&(D.pw||'').length>=(su?8:1)&&(!su||(D.sport&&(D.sport==='pt'||D.space)&&(D.name||'').trim()&&agOk())));}
+function pwMatchText(){const D=S.drafts;if(!D.pw2)return '';return D.pw===D.pw2?'비밀번호가 일치해요':'비밀번호가 서로 달라요';}
+function pwMatchStyle(){const D=S.drafts;return !D.pw2?'display:none':D.pw===D.pw2?'color:#12803F':'color:#E0322A';}
+function authReady(){const su=S.authMode==='signup',D=S.drafts;return !!((D.email||'').trim()&&(D.pw||'').length>=(su?8:1)&&(!su||(D.pw===D.pw2&&D.sport&&(D.sport==='pt'||D.space)&&(D.name||'').trim()&&agOk())));}
 function agBlock(){
   const a=S.ag,all=a.terms&&a.privacy&&a.overseas;
   const row=(k,label,view)=>'<div class="agrow"><button class="agck'+(a[k]?' on':'')+'" data-act="ag" data-v="'+k+'" aria-pressed="'+!!a[k]+'"><span class="agbox">'+I.check+'</span>'+label+'</button>'+(view?'<button class="agview" data-act="terms" data-v="'+view+'">보기</button>':'')+'</div>';
@@ -817,6 +828,7 @@ function vAuth(){
     (su?'<label for="aname">이름</label><input id="aname" type="text" data-field="name" value="'+esc(D.name||'')+'" placeholder="함께하는 코치·회원에게 보여요" autocomplete="name"><div style="height:22px"></div>':'')+
     '<label for="aemail">이메일</label><input id="aemail" type="email" data-field="email" value="'+esc(D.email||'')+'" placeholder="example@email.com" autocomplete="email" inputmode="email">'+
     '<div style="height:22px"></div><label for="apw">비밀번호</label><input id="apw" type="password" data-field="pw" value="'+esc(D.pw||'')+'" placeholder="'+(su?'8자 이상':'비밀번호')+'" autocomplete="'+(su?'new-password':'current-password')+'">'+
+    (su?'<div style="height:22px"></div><label for="apw2">비밀번호 확인</label><input id="apw2" type="password" data-field="pw2" value="'+esc(D.pw2||'')+'" placeholder="비밀번호를 한 번 더 입력해 주세요" autocomplete="new-password"><p class="hint" id="pwmatch" style="margin-top:8px;font-weight:700;'+pwMatchStyle()+'">'+pwMatchText()+'</p>':'')+
     (su?agBlock():'')+
     (S.authErr?'<p class="hint" style="color:#E0322A;font-weight:700">'+esc(S.authErr)+'</p>':'')+
     '<button class="go'+(ready?' ready':'')+'" data-act="auth"'+(S.authBusy?' disabled':'')+'>'+(S.authBusy?'잠시만요…':(su?'가입하고 시작하기':'시작하기'))+'</button>'+
@@ -832,10 +844,66 @@ function vOnboard(){
 }
 
 /* ---------- player: today ---------- */
+/* ---------- 레슨 일정 + 휴대폰 알림 ---------- */
+function gcls(){return Object.entries(Store.data.gclass||{}).map(([id,c])=>Object.assign({},c,{id}));}
+function upcoming(pid,coach){const t=today();return gcls().filter(c=>(coach?c.coachId===ME:c.playerId===pid)&&c.date>=t&&c.status!=='done').sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));}
+function whenLabel(c){const t=today();return c.date===t?'오늘':c.date===addD(t,1)?'내일':md(c.date)+'('+WD[pd(c.date).getDay()]+')';}
+function hm(t){const m=/^(\d{2}):(\d{2})$/.exec(t||'');if(!m)return t||'';const h=+m[1];return (h<12?'오전 ':'오후 ')+((h%12)||12)+'시'+(m[2]!=='00'?' '+(+m[2])+'분':'');}
+function lessonBanner(){
+  const n=upcoming(ME)[0];if(!n)return '';const w=whenLabel(n);if(w!=='오늘'&&w!=='내일')return '';
+  return '<div class="remind"><span class="rb">'+I.lesson+'</span><span><b>'+w+' '+hm(n.time)+' 레슨이 있어요</b><small>'+esc(cName(n.coachId))+' 코치'+(n.memo?' · '+esc(n.memo):'')+'</small></span></div>';
+}
+function gcRow(c,coach){return '<div class="prow"><span><b class="num">'+whenLabel(c)+' '+hm(c.time)+'</b> · '+esc(coach?pName(c.playerId):cName(c.coachId)+' 코치')+(c.memo?' <span class="muted">· '+esc(c.memo)+'</span>':'')+'</span>'+(coach?'<button class="rbtn del" data-act="gcdel" data-v="'+esc(c.id)+'">취소</button>':'')+'</div>';}
+function gcCoach(ps){
+  const up=upcoming(ME,true).filter(c=>S.lessonPlayer==='all'||c.playerId===S.lessonPlayer);
+  let h='<h2>레슨 일정 <small>하루 전 오후 2시에 선수에게 알림</small></h2>';
+  if(S.gc){const g=S.gc;
+    h+='<div class="card gcform"><div class="k">선수</div><div class="pills">'+ps.map(p=>'<button class="pill'+(g.playerId===p?' on':'')+'" data-act="gcp" data-v="'+esc(p)+'">'+esc(pName(p))+'</button>').join('')+'</div>'+
+      '<div class="gcdt"><div><div class="k">날짜</div><input type="date" data-field="gc-date" value="'+esc(g.date)+'" min="'+today()+'"></div><div><div class="k">시간</div><input type="time" data-field="gc-time" value="'+esc(g.time)+'" step="600"></div></div>'+
+      '<div class="k">메모 (선택)</div><input type="text" data-field="gc-memo" value="'+esc(g.memo)+'" maxlength="60" placeholder="예: 드라이버 레슨, 연습장 3층">'+
+      '<div style="display:flex;gap:8px;margin-top:12px"><button class="btn ghost" data-act="gccancel" style="margin:0">닫기</button><button class="btn" data-act="gcsave" style="margin:0">레슨 잡기</button></div></div>';
+  }else h+='<button class="btn ghost" data-act="gcnew" style="margin:0 0 10px">+ 레슨 잡기</button>';
+  h+='<div class="card" style="padding:4px 16px">'+(up.length?up.slice(0,15).map(c=>gcRow(c,true)).join(''):'<p class="muted" style="font-size:14px">잡힌 레슨이 없어요.</p>')+'</div>';
+  return h;
+}
+const PUSH={
+  ok:()=>'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window&&location.protocol==='https:',
+  ios:()=>/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1),
+  home:()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true,
+  st:null,
+  async check(){
+    if(!PUSH.ok()){PUSH.st=PUSH.ios()&&!PUSH.home()?'ios':'no';return;}
+    if(Notification.permission==='denied'){PUSH.st='denied';return;}
+    try{const r=await navigator.serviceWorker.getRegistration();const sub=r&&await r.pushManager.getSubscription();PUSH.st=sub&&Notification.permission==='granted'?'on':'off';}catch(e){PUSH.st='off';}
+  },
+  async on(){
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){PUSH.st=perm==='denied'?'denied':'off';throw new Error('알림을 허용해야 받을 수 있어요.');}
+    const reg=await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;
+    const {key}=await API.req('/push/key');
+    const raw=atob(key.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-key.length%4)%4));
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:Uint8Array.from(raw,c=>c.charCodeAt(0))});
+    await API.req('/push/sub',{method:'POST',body:{sub:sub.toJSON()}});PUSH.st='on';
+  },
+  async off(){
+    const r=await navigator.serviceWorker.getRegistration();const sub=r&&await r.pushManager.getSubscription();
+    if(sub){await API.req('/push/unsub',{method:'POST',body:{endpoint:sub.endpoint}}).catch(()=>{});await sub.unsubscribe();}PUSH.st='off';
+  },
+  card(){
+    const st=PUSH.st;if(!st){PUSH.check().then(requestRender);}
+    const t='<b style="display:block">레슨 하루 전 알림</b><small class="muted" style="display:block;font-size:12.5px;margin-top:2px">레슨 전날 오후 2시에 휴대폰으로 알려 드려요</small>';
+    if(st==='on')return '<div class="card"><div class="prow" style="border:0"><span>'+t+'</span><span class="badge match">켜짐</span></div><div style="display:flex;gap:8px"><button class="btn ghost sm" data-act="pushtest" style="margin:0">알림 테스트</button><button class="btn ghost sm" data-act="pushoff" style="margin:0">끄기</button></div></div>';
+    if(st==='ios')return '<div class="card"><div style="margin:0 0 8px">'+t+'</div><p class="muted" style="margin:0;font-size:13.5px">아이폰은 사파리에서 <b>공유 버튼 → 홈 화면에 추가</b>를 한 다음, 홈 화면의 FeedUp으로 열어야 알림을 켤 수 있어요. 알림이 없어도 앱을 열면 레슨 안내가 보여요.</p></div>';
+    if(st==='denied')return '<div class="card"><div style="margin:0 0 8px">'+t+'</div><p class="muted" style="margin:0;font-size:13.5px">이 기기에서 알림이 막혀 있어요. 휴대폰 설정 → 알림(또는 브라우저 사이트 설정)에서 FeedUp 알림을 허용해 주세요.</p></div>';
+    if(st==='no')return '<div class="card"><div style="margin:0 0 8px">'+t+'</div><p class="muted" style="margin:0;font-size:13.5px">이 브라우저는 알림을 지원하지 않아요. 크롬이나 삼성 인터넷에서 열어 주세요. 앱을 열면 레슨 안내는 보여요.</p></div>';
+    return '<div class="card"><div style="margin:0 0 10px">'+t+'</div><button class="btn" data-act="pushon" style="margin:0">'+(st===null?'확인 중…':'알림 켜기')+'</button></div>';
+  }
+};
 function vToday(){
   const p=ME,d=S.date,L=getLog(p,d),gs=groups(p,d),items=allItems(p,d),done=doneOf(L,items),t=today();
   const fut=d>t,isT=d===t,dt=pd(d);
-  let h='<section class="hero"><div><div class="bigdate num">'+md(d)+'</div><div class="sub muted">'+WD[dt.getDay()]+'요일'+(isT?', 오늘':'')+'</div></div>'+
+  let h=lessonBanner()+'<section class="hero"><div><div class="bigdate num">'+md(d)+'</div><div class="sub muted">'+WD[dt.getDay()]+'요일'+(isT?', 오늘':'')+'</div></div>'+
     '<div class="tally"><span class="n num">'+done+'</span><span class="d num">/'+(items.length+unnamedOwn(p))+'</span><div class="lab">완료한 연습</div></div></section>';
   h+='<div class="seg" aria-hidden="true">'+items.map(x=>'<i class="'+(isChk(L,x)?'on':'')+'"></i>').join('')+'<i></i>'.repeat(unnamedOwn(p))+'</div>';
   const ws=monday(d);
@@ -1199,8 +1267,8 @@ function vInbox(){
     }
     const others=fbsFor(it.kind,it.id,it.p).filter(f=>f.coachId!==ME);
     return '<div class="inbox"><div class="hd"><span class="pn">'+esc(pName(it.p))+'</span><span>'+(it.kind==='log'?'<span class="badge log">연습 체크</span>':it.kind==='lesson'?'<span class="badge match">레슨</span>':'<span class="badge wait">'+(KIND(it.o)==='match'?'시합':'라운드')+'</span>')+' <span class="dt num">'+md(it.date)+'</span></span></div>'+b+
-      (others.length?others.map(f=>'<div class="fbo"><b>'+esc(cName(f.coachId))+'</b>: '+esc(f.text)+'</div>').join(''):'')+
-      '<textarea data-field="fb" data-ref="'+esc(ref)+'" placeholder="피드백을 적어 주세요" style="margin-top:8px">'+esc(draft)+'</textarea><div class="acts">'+
+      (others.length?others.map(f=>'<div class="fbo"><b>'+esc(cName(f.coachId))+'</b>: '+esc(f.text)+fbMediaView(f.media)+'</div>').join(''):'')+
+      '<textarea data-field="fb" data-ref="'+esc(ref)+'" placeholder="피드백을 적어 주세요" style="margin-top:8px">'+esc(draft)+'</textarea>'+fbMediaEdit(ref,it.p)+'<div class="acts">'+
       (it.kind==='round'?'<button class="link muted" data-act="viewround" data-v="'+esc(it.id)+'">스코어카드 보기</button>':'<span></span>')+
       '<button class="btn sm" data-act="sendfb" data-v="'+esc(ref)+'" data-p="'+esc(it.p)+'" data-d="'+esc(it.date)+'">'+(it.mine?'피드백 수정':'피드백 보내기')+'</button></div></div>';
   }).join('');
@@ -1255,7 +1323,7 @@ function lessonCard(l,viewer){
     const ref='lesson:'+l.id,mine=Store.data.feedback[fbId(ME,'lesson',l.id)],draft=S.drafts[ref]!=null?S.drafts[ref]:(mine?mine.text:'');
     const others=fbsFor('lesson',l.id,l.playerId).filter(f=>f.coachId!==ME);
     h+=others.map(f=>'<div class="fbo"><b>'+esc(cName(f.coachId))+'</b>: '+esc(f.text)+'</div>').join('');
-    h+='<textarea data-field="fb" data-ref="'+esc(ref)+'" placeholder="레슨 내용에 대한 피드백" style="margin-top:10px;min-height:64px">'+esc(draft)+'</textarea><div class="acts"><span></span><button class="btn sm" data-act="sendfb" data-v="'+esc(ref)+'" data-p="'+esc(l.playerId)+'" data-d="'+esc(l.date)+'">'+(mine?'피드백 수정':'피드백 보내기')+'</button></div>';
+    h+='<textarea data-field="fb" data-ref="'+esc(ref)+'" placeholder="레슨 내용에 대한 피드백" style="margin-top:10px;min-height:64px">'+esc(draft)+'</textarea>'+fbMediaEdit(ref,l.playerId)+'<div class="acts"><span></span><button class="btn sm" data-act="sendfb" data-v="'+esc(ref)+'" data-p="'+esc(l.playerId)+'" data-d="'+esc(l.date)+'">'+(mine?'피드백 수정':'피드백 보내기')+'</button></div>';
   }else{
     h+=fbHtml(fbsFor('lesson',l.id,l.playerId));
   }
@@ -1287,6 +1355,7 @@ function vLessons(){
     let h='<section class="hero"><div><div class="bigdate num">'+list.filter(l=>l.date.slice(0,7)===mon).length+'</div><div class="sub muted">이번 달 선수들이 기록한 내 레슨</div></div></section>';
     h+=SOLO()?'<div style="display:flex;gap:8px;margin:0 0 14px"><button class="btn" data-act="newclesson" style="margin:0;flex:1">레슨 기록하기</button><button class="btn ghost" data-act="newhw" style="margin:0;flex:1">숙제 보내기</button></div>':'<button class="btn" data-act="newhw" style="margin:0 0 14px">숙제 보내기</button>';
     h+='<div class="chips"><button class="'+(S.lessonPlayer==='all'?'on':'')+'" data-act="lpf" data-v="all">모든 선수</button>'+ps.map(x=>'<button class="'+(S.lessonPlayer===x?'on':'')+'" data-act="lpf" data-v="'+esc(x)+'">'+esc(pName(x))+'</button>').join('')+'</div>';
+    if(SOLO())h+=gcCoach(ps);
     if(mine.length)h+='<h2>내가 기록한 레슨 <small>'+mine.length+'개</small></h2>'+mine.slice(0,20).map(l=>lessonCard(l,'coach')).join('');
     if(hws.length)h+='<h2>보낸 숙제 <small>'+hws.length+'개</small></h2>'+hws.slice(0,10).map(x=>hwCard(x,'coach')).join('');
     h+='<h2>선수가 기록한 레슨 <small>'+list.length+'개</small></h2>';
@@ -1296,6 +1365,8 @@ function vLessons(){
   const list=lessonsOf(ME),hws=allHw().filter(x=>x.playerId===ME).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
   let h='<section class="hero"><div><div class="bigdate num">'+list.filter(l=>l.date.slice(0,7)===mon).length+'</div><div class="sub muted">이번 달 받은 레슨</div></div><div class="tally"><span class="n num">'+list.length+'</span><div class="lab">전체 레슨</div></div></section>';
   h+='<button class="btn" data-act="newlesson" style="margin:0 0 16px">레슨 기록하기</button>';
+  const nx=upcoming(ME);
+  if(nx.length)h+='<h2 style="margin-top:4px">다음 레슨</h2><div class="card" style="padding:4px 16px">'+nx.slice(0,3).map(c=>gcRow(c,false)).join('')+'</div>';
   if(hws.length)h+='<h2 style="margin-top:4px">코치가 보낸 숙제</h2>'+hws.slice(0,3).map(x=>hwCard(x,'player')).join('')+'<h2>레슨 기록</h2>';
   if(!list.length)return h+'<div class="empty">레슨이 끝나면 배운 내용과 숙제를 적고 사진이나 짧은 영상을 남겨 보세요. 숙제는 오늘 체크리스트에 자동으로 들어가요.</div>';
   return h+list.map(l=>lessonCard(l,'player')).join('');
@@ -1449,6 +1520,63 @@ function uploadBlob(url,blob,type,onp){
     x.send(blob);
   });
 }
+// 사진·영상 하나를 올려요(사진은 줄이고, 영상은 소리까지 담아 줄이거나 원본을 나눠 올려요). 결과 {key,type}
+async function uploadAny(file,smallUrl,bigInfo,say){
+  const name=(file.name||'').toLowerCase();
+  let type=(file.type||'').toLowerCase();
+  if(!type)type=/\.mov$/.test(name)?'video/quicktime':/\.(mp4|m4v)$/.test(name)?'video/mp4':/\.webm$/.test(name)?'video/webm':/\.(jpe?g)$/.test(name)?'image/jpeg':/\.png$/.test(name)?'image/png':/\.(heic|heif)$/.test(name)?'image/heic':'';
+  let blob=file,big=false;
+  if(type.startsWith('image/')){
+    blob=await shrinkImage(file);type=(blob.type||'').toLowerCase();
+    if(!/^image\/(jpeg|png|webp|gif)$/.test(type))throw new Error('이 사진 형식은 올릴 수 없어요. 다른 사진을 골라 주세요.');
+  }else if(type.startsWith('video/')){
+    if(type==='video/x-m4v')type='video/mp4';
+    say('영상 확인 중…');
+    const d=await videoDuration(file);
+    if(d==null)throw new Error('영상 길이를 확인하지 못했어요. 1분 이내로 잘라서 다시 올려 주세요.');
+    if(d>61)throw new Error('1분 이내 영상만 올릴 수 있어요. 지금 영상은 '+Math.round(d)+'초예요. 사진 앱에서 잘라서 올려 주세요.');
+    let small=null;
+    if(canRecode()){say('영상 줄이는 중 0% · 화면을 켜 두세요');const r=await recodeVideo(file,p=>say('영상 줄이는 중 '+Math.round(p*100)+'% · 화면을 켜 두세요'),d>20?1800000:2500000);if(r&&r.audio&&r.blob.size<file.size)small=r.blob;}
+    if(small){blob=small;type=(small.type||'video/webm').split(';')[0];}
+    else{
+      if(!/^video\/(mp4|quicktime|webm)$/.test(type))throw new Error('mp4나 mov 영상만 올릴 수 있어요.');
+      if(file.size>400*1024*1024)throw new Error('영상 용량이 너무 커요('+Math.round(file.size/1048576)+'MB). 카메라 화질을 1080p로 낮춰 찍거나 더 짧게 잘라 주세요.');
+      if(file.size>40*1024*1024)big=true;
+    }
+  }else throw new Error('사진이나 영상 파일만 올릴 수 있어요.');
+  if(big)return await uploadBig(file,type,bigInfo,say);
+  let j=null;
+  for(let t=0;t<2&&!j;t++){
+    try{say('올리는 중 0%');j=await uploadBlob(smallUrl,blob,type,p=>say('올리는 중 '+Math.round(p*100)+'%'));}
+    catch(e){if(t===1||e.http)throw e;say('다시 시도 중…');await new Promise(r=>setTimeout(r,1500));}
+  }
+  return j;
+}
+// 코치 피드백 사진·영상
+function fbMediaList(ref){if(S.fbm[ref])return S.fbm[ref];const i=ref.indexOf(':'),cur=Store.data.feedback[fbId(ME,ref.slice(0,i),ref.slice(i+1))];return (cur&&cur.media)||[];}
+function fbMediaView(list){
+  if(!list||!list.length)return '';
+  return '<div class="mgrid">'+list.map(m=>'<div class="mitem"><button class="mthumb" data-act="viewmedia" data-k="'+esc(m.key)+'" data-t="'+m.type+'" aria-label="'+(m.type==='video'?'영상 보기':'사진 크게 보기')+'">'+(m.type==='video'?'<video src="'+mediaUrl(m.key)+'#t=0.1" preload="metadata" muted playsinline></video><span class="play">▶</span>':'<img src="'+mediaUrl(m.key)+'" loading="lazy" alt="피드백 사진">')+'</button></div>').join('')+'</div>';
+}
+function fbMediaEdit(ref,player){
+  const list=fbMediaList(ref),up=S.fbUp&&S.fbUp.ref===ref;
+  return '<div class="mgrid">'+list.map(m=>'<div class="mitem"><button class="mthumb" data-act="viewmedia" data-k="'+esc(m.key)+'" data-t="'+m.type+'">'+(m.type==='video'?'<video src="'+mediaUrl(m.key)+'#t=0.1" preload="metadata" muted playsinline></video><span class="play">▶</span>':'<img src="'+mediaUrl(m.key)+'" loading="lazy" alt="">')+'</button><button class="mdel" data-act="fbmdel" data-v="'+esc(ref)+'" data-k="'+esc(m.key)+'" aria-label="삭제">'+I.x+'</button></div>').join('')+
+    (up?'<div class="mitem"><div class="mup" id="fbup">'+esc(S.fbUp.msg||'올리는 중…')+'</div></div>':'')+
+    (!up&&list.length<6?'<label class="mitem"><span class="madd"><b>+</b>사진·영상</span><input type="file" class="mfile" accept="image/*,video/*" data-field="fbfile" data-ref="'+esc(ref)+'" data-p="'+esc(player)+'" aria-label="피드백에 사진이나 영상 추가"></label>':'')+'</div>';
+}
+async function addFbMedia(file,ref,player){
+  if(S.fbUp){toast('올리는 중이에요. 잠시만 기다려 주세요.');return;}
+  const list=fbMediaList(ref).slice();
+  if(list.length>=6){toast('사진·영상은 6개까지 보낼 수 있어요.');return;}
+  const say=m=>{S.fbUp.msg=m;const el=document.getElementById('fbup');if(el)el.textContent=m;};
+  S.fbUp={ref,msg:'준비 중…'};render();
+  try{
+    const j=await uploadAny(file,'/api/fbmedia?player='+encodeURIComponent(player),{kind:'fb',player},say);
+    S.fbm[ref]=fbMediaList(ref).concat({key:j.key,type:j.type});S.fbNew=(S.fbNew||[]).concat(j.key);
+    toast('올렸어요. 피드백 보내기를 누르면 선수에게 전달돼요.');
+  }catch(e){toast(e.message||'올리지 못했어요.');}
+  S.fbUp=null;render();
+}
 async function addMedia(file){
   const l=S.lesson;if(!l||!file)return;
   S.mediaMsg='';
@@ -1542,6 +1670,7 @@ function vMe(){
   h+='<h2>자녀 기록 보기 <span class="prem">프리미엄</span></h2><div class="card"><p style="margin:0" class="muted">학부모라면 자녀에게 받은 학부모 코드를 입력하세요.</p>'+
     '<div class="addline"><input type="text" data-field="pjoin" placeholder="자녀에게 받은 코드 6자리" value="'+esc(S.drafts.pjoin||'')+'" autocapitalize="characters" maxlength="8"><button class="btn sm" data-act="pjoin">연결</button></div>'+
     (kl.length?'<div style="margin-top:10px">'+kl.map(l=>'<div class="prow"><span>'+esc(pName(l.playerId))+'</span><button class="rbtn del" data-act="unparent" data-v="'+esc(l.id)+'">연결 해제</button></div>').join('')+'</div>'+(S.mode!=='parent'?'<button class="btn" data-act="mode" data-v="parent">학부모 모드로 가기</button>':''):'')+'</div>';
+  h+='<h2>휴대폰 알림</h2>'+PUSH.card();
   h+='<h2>계정</h2><div class="card"><p style="margin:0" class="muted">'+esc(USER?USER.email:'')+'</p><button class="btn ghost" data-act="logout">로그아웃</button></div>';
   if(S.admin)h+='<h2>관리자</h2><a class="btn" href="/admin" style="text-decoration:none">관리자 페이지 열기</a>';
   h+='<h2>약관 및 정책</h2><div class="card" style="padding:4px 16px">'+[['terms','서비스 이용약관'],['paid','유료서비스 이용약관 및 환불 규정'],['privacy','개인정보 처리방침']].map(x=>'<button class="prow" style="width:100%;text-align:left;font-weight:500" data-act="terms" data-v="'+x[0]+'"><span>'+x[1]+'</span>'+I.right.replace('<svg','<svg width="16" height="16"')+'</button>').join('')+'</div>';
@@ -1586,6 +1715,16 @@ document.addEventListener('click',async e=>{
       if(!n){toast('이름을 입력하세요.');break;}
       await Store.set('profiles',ME,{name:n,share:false,field:FIELD.id,createdAt:Date.now()});delete S.drafts.name;render();break;}
     case'authmode':S.authMode=v;S.authErr='';render();break;
+    case'gcnew':{const ps=playersOf(ME);S.gc={playerId:S.lessonPlayer!=='all'?S.lessonPlayer:(ps.length===1?ps[0]:''),date:addD(today(),1),time:'19:00',memo:''};render();break;}
+    case'gcp':if(S.gc){S.gc.playerId=v;render();}break;
+    case'gccancel':S.gc=null;render();break;
+    case'gcsave':{const g=S.gc;if(!g)break;if(!g.playerId){toast('선수를 골라 주세요.');break;}if(!g.date||!/^\d{2}:\d{2}$/.test(g.time||'')){toast('날짜와 시간을 넣어 주세요.');break;}if(g.date<today()){toast('지난 날짜에는 잡을 수 없어요.');break;}
+      Store.set('gclass','gc'+uid(),{coachId:ME,playerId:g.playerId,date:g.date,time:g.time,memo:(g.memo||'').trim(),status:'booked',space:S.space||'solo',createdAt:Date.now()});
+      toast(pName(g.playerId)+'님 '+md(g.date)+' '+hm(g.time)+' 레슨을 잡았어요.');S.gc=null;render();break;}
+    case'gcdel':{const c=(Store.data.gclass||{})[v];if(!c)break;ask(pName(c.playerId)+'님 '+md(c.date)+' '+hm(c.time)+' 레슨을 취소할까요?','레슨 취소',()=>{Store.del('gclass',v);render();},true);break;}
+    case'pushon':try{await PUSH.on();toast('알림을 켰어요. 레슨 전날 오후 2시에 알려 드려요.');}catch(err){toast(err.message||'알림을 켜지 못했어요.');}render();break;
+    case'pushoff':try{await PUSH.off();toast('알림을 껐어요.');}catch(err){}render();break;
+    case'pushtest':try{await API.req('/push/test',{method:'POST'});toast('테스트 알림을 보냈어요.');}catch(err){toast(err.message);}break;
     case'suspace':S.drafts.space=v;S.authErr='';render();break;
     case'gosport':lsSet('fu_sport','pt');location.href='/pt';break;
     case'sport':S.drafts.sport=v;if(v==='pt')delete S.drafts.space;S.authErr='';render();break;
@@ -1613,10 +1752,11 @@ document.addEventListener('click',async e=>{
       S.authBusy=true;S.authErr='';render();
       try{
         if(su&&!D.sport)throw new Error('종목을 골라 주세요.');
+        if(su&&(D.pw||'')!==(D.pw2||''))throw new Error('비밀번호 확인이 맞지 않아요. 같은 비밀번호를 두 번 입력해 주세요.');
         if(su&&D.sport==='golf'&&!D.space)throw new Error('사용 방식을 골라 주세요.');
         if(su&&!agOk())throw new Error('약관 동의와 나이 확인을 완료해 주세요.');
         const j=await API.req(su?'/auth/signup':'/auth/login',{method:'POST',body:{email:D.email,password:D.pw,name:D.name,space:su&&D.sport==='golf'?D.space:undefined,app:su&&D.sport==='pt'?'pt':undefined,agree:su?S.ag:undefined}});
-        USER=j.user;ME=j.me;delete D.pw;S.loading=true;render();
+        USER=j.user;ME=j.me;delete D.pw;delete D.pw2;S.loading=true;render();
         await Store.load();try{S.admin=!!(await API.req('/me')).admin;}catch(e){}S.loading=false;
       }catch(err){S.authErr=err.message;}
       S.authBusy=false;render();break;}
@@ -1716,10 +1856,12 @@ document.addEventListener('click',async e=>{
     case'sendfb':{
       const i=v.indexOf(':'),kind=v.slice(0,i),ref=v.slice(i+1);
       const cur=Store.data.feedback[fbId(ME,kind,ref)];
-      const txt=(S.drafts[v]!=null?S.drafts[v]:(cur?cur.text:'')).trim();
-      if(!txt){toast('피드백 내용을 입력하세요.');break;}
-      await Store.set('feedback',fbId(ME,kind,ref),{coachId:ME,playerId:el.dataset.p,kind,ref,date:el.dataset.d,text:txt,at:Date.now()});
-      delete S.drafts[v];toast('피드백을 보냈어요.');render();break;}
+      const txt=(S.drafts[v]!=null?S.drafts[v]:(cur?cur.text:'')).trim(),media=fbMediaList(v);
+      if(S.fbUp&&S.fbUp.ref===v){toast('사진·영상을 올리는 중이에요. 잠시만 기다려 주세요.');break;}
+      if(!txt&&!media.length){toast('피드백 내용이나 사진·영상을 넣어 주세요.');break;}
+      await Store.set('feedback',fbId(ME,kind,ref),{coachId:ME,playerId:el.dataset.p,kind,ref,date:el.dataset.d,text:txt,media,at:Date.now()});
+      delete S.drafts[v];delete S.fbm[v];S.fbNew=(S.fbNew||[]).filter(k=>!media.some(m=>m.key===k));toast('피드백을 보냈어요.');render();break;}
+    case'fbmdel':{const k=el.dataset.k;S.fbm[v]=fbMediaList(v).filter(m=>m.key!==k);if((S.fbNew||[]).includes(k)){S.fbNew=S.fbNew.filter(x=>x!==k);API.req('/media/'+k,{method:'DELETE'}).catch(()=>{});}render();break;}
     case'newcode':try{await newCode();toast('초대 코드를 만들었어요.');}catch(err){toast(err.message);}render();break;
     case'startcoach':try{await newCode();}catch(err){toast(err.message);break;}setMode('coach');S.tab='players';render();toast('코치 기능을 켰어요. 초대 코드를 선수에게 알려주세요.');break;
     case'approve':await Store.update('links',v,{status:'active',approvedAt:Date.now()});toast('연결했어요.');render();break;
@@ -1741,6 +1883,8 @@ document.addEventListener('input',e=>{
   const el=e.target,f=el.dataset&&el.dataset.field;if(!f)return;
   const v=el.value;
   if(f==='memo')updateLog(ME,S.date,{memo:v},700);
+  else if(f==='gc-memo'){if(S.gc)S.gc.memo=v;}
+  else if((f==='gc-date'||f==='gc-time')&&S.gc){if(v)S.gc[f.slice(3)]=v;}
   else if(f==='r-course')S.round.course=v;
   else if(f==='m-name')S.round.match.name=v;
   else if(f==='m-rank')S.round.match.rank=v.replace(/[^0-9]/g,'');
@@ -1763,11 +1907,12 @@ document.addEventListener('input',e=>{
   else if(f==='dt')S.dd[el.dataset.w][+el.dataset.i].target=v;
   else S.drafts[f]=v;
   if(['ag-gname','ag-gphone'].includes(f)){const b=document.querySelector('.onb .go');if(b)b.classList.toggle('ready',USER?agOk():authReady());}
-  if(['name','email','pw'].includes(f)){const b=document.querySelector('.onb .go');if(b){
+  if(f==='pw'||f==='pw2'){const m=document.getElementById('pwmatch');if(m){m.textContent=pwMatchText();m.setAttribute('style','margin-top:8px;font-weight:700;'+pwMatchStyle());}}
+  if(['name','email','pw','pw2'].includes(f)){const b=document.querySelector('.onb .go');if(b){
     if(!USER)b.classList.toggle('ready',authReady());
     else b.classList.toggle('ready',!!v.trim());}}
 });
-document.addEventListener('change',e=>{const el=e.target;if(el.dataset&&el.dataset.field==='hw-date'&&el.value&&S.hwEdit)S.hwEdit.date=el.value;if(el.dataset&&el.dataset.field==='mfile'){const f=el.files&&el.files[0];el.value='';if(f){primeAudio();addMedia(f);}return;}if(el.dataset&&el.dataset.field==='l-date'&&el.value&&S.lesson)S.lesson.date=el.value;if(el.dataset&&el.dataset.field==='r-date'&&el.value&&S.round)S.round.date=el.value;});
+document.addEventListener('change',e=>{const el=e.target;if(el.dataset&&(el.dataset.field==='gc-date'||el.dataset.field==='gc-time')&&el.value&&S.gc)S.gc[el.dataset.field.slice(3)]=el.value;if(el.dataset&&el.dataset.field==='hw-date'&&el.value&&S.hwEdit)S.hwEdit.date=el.value;if(el.dataset&&el.dataset.field==='mfile'){const f=el.files&&el.files[0];el.value='';if(f){primeAudio();addMedia(f);}return;}if(el.dataset&&el.dataset.field==='fbfile'){const f=el.files&&el.files[0],ref=el.dataset.ref,pl=el.dataset.p;el.value='';if(f){primeAudio();addFbMedia(f,ref,pl);}return;}if(el.dataset&&el.dataset.field==='l-date'&&el.value&&S.lesson)S.lesson.date=el.value;if(el.dataset&&el.dataset.field==='r-date'&&el.value&&S.round)S.round.date=el.value;});
 document.addEventListener('keydown',e=>{
   if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('div[role=button][data-act]')){e.preventDefault();e.target.click();return;}
   if(e.key==='Enter'&&!USER&&e.target.closest&&e.target.closest('.onb')){const b=document.querySelector('[data-act=auth]');if(b)b.click();return;}
