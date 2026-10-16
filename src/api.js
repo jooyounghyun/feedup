@@ -205,6 +205,10 @@ async function state(env, ME) {
   toMap(await rowsIn(env, 'homework', 'player', [ME, ...children]), out.homework);
   toMap(await rowsIn(env, 'lessons', 'player', [ME, ...children, ...shared]), out.lessons);
   toMap(await rowsIn(env, 'reports', 'owner', [ME]), out.reports);
+  // 골프 레슨 일정
+  out.gclass = {};
+  toMap(await rowsIn(env, 'gclass', 'coach', [ME]), out.gclass);
+  toMap(await rowsIn(env, 'gclass', 'player', [ME, ...children]), out.gclass);
   // PT: 나와 내 회원들의 기록 + 내가 만든 운동
   out.ptdocs = {};
   toMap(await rowsIn(env, 'ptdocs', 'player', [ME, ...players]), out.ptdocs);
@@ -381,6 +385,18 @@ async function write(env, ME, b) {
       if (!cur) return J({ ok: true });
       if (cur.parentId !== ME && cur.playerId !== ME) return deny();
       await delDoc(env, col, id); return J({ ok: true });
+    }
+    case 'gclass': {
+      // 골프 레슨 일정: 코치가 연결된 선수의 레슨 날짜·시간을 잡아요 (하루 전 오후 2시 알림)
+      if (!/^gc[a-z0-9]{6,40}$/.test(id)) return deny();
+      const cur = await getDoc(env, col, id);
+      if (cur && cur.coachId !== ME) return deny();
+      if (del) { if (cur) await delDoc(env, col, id); return J({ ok: true }); }
+      const playerId = cur ? cur.playerId : str(data.playerId, 60);
+      if (!(await isActivePlayer(env, ME, playerId))) return fail('연결된 선수에게만 레슨을 잡을 수 있어요.', 403);
+      if (!isDate(data.date) || !/^\d{2}:\d{2}$/.test(String(data.time || ''))) return fail('날짜와 시간을 확인해 주세요.');
+      await putDoc(env, col, id, { coachId: ME, playerId, date: data.date, time: data.time, memo: str(data.memo, 60), status: data.status === 'done' ? 'done' : 'booked', space: data.space === 'solo' ? 'solo' : 'academy', createdAt: (cur && cur.createdAt) || Date.now(), updatedAt: Date.now() }, { coach: ME, player: playerId });
+      return J({ ok: true });
     }
     case 'ptdocs': {
       // PT 기록. 회원이 쓰는 것(log 운동, meal 식단, pain 통증), 트레이너가 쓰는 것(session 수업, class 일정, fb 피드백, pkg 회원권),
@@ -668,7 +684,7 @@ async function deleteAccount(req, env, user) {
     }
   }
   await env.DB.batch([
-    env.DB.prepare("DELETE FROM docs WHERE owner=?1 OR player=?1 OR (coach=?1 AND col IN ('links','codes','feedback'))").bind(ME),
+    env.DB.prepare("DELETE FROM docs WHERE owner=?1 OR player=?1 OR (coach=?1 AND col IN ('links','codes','feedback','gclass'))").bind(ME),
     env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(user.id),
     env.DB.prepare('DELETE FROM ai_usage WHERE user_id=?').bind(user.id),
     env.DB.prepare('DELETE FROM users WHERE id=?').bind(user.id),
@@ -817,6 +833,110 @@ async function ai(env, userId, b) {
 }
 
 /* ---------------- router ---------------- */
+
+/* ---------------- 푸시 알림 (Web Push, 표준 암호화 aes128gcm + VAPID) ---------------- */
+const b64u = (buf) => { const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const ub64 = (s) => { s = String(s).replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
+const cat = (...a) => { const n = a.reduce((x, y) => x + y.length, 0), o = new Uint8Array(n); let i = 0; a.forEach((y) => { o.set(y, i); i += y.length; }); return o; };
+async function hmac(key, data) {
+  const k = await crypto.subtle.importKey('raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return new Uint8Array(await crypto.subtle.sign('HMAC', k, data));
+}
+// 서버 알림 열쇠(VAPID): 처음 한 번 자동으로 만들어 D1에 보관해요(따로 설정할 것 없음)
+async function vapidKeys(env) {
+  const cur = await getDoc(env, 'sys', 'vapid');
+  if (cur && cur.pub && cur.jwk) return cur;
+  const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+  const v = { pub: b64u(await crypto.subtle.exportKey('raw', kp.publicKey)), jwk: await crypto.subtle.exportKey('jwk', kp.privateKey), at: Date.now() };
+  await putDoc(env, 'sys', 'vapid', v, {});
+  return v;
+}
+async function vapidJWT(env, aud) {
+  const v = await vapidKeys(env);
+  const h = b64u(enc.encode(JSON.stringify({ typ: 'JWT', alg: 'ES256' })));
+  const p = b64u(enc.encode(JSON.stringify({ aud, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: env.PUSH_SUBJECT || 'mailto:noreply@feedup.app' })));
+  const key = await crypto.subtle.importKey('jwk', v.jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, enc.encode(h + '.' + p));
+  return { jwt: h + '.' + p + '.' + b64u(sig), pub: v.pub };
+}
+async function encryptPush(sub, text) {
+  const uaPub = ub64(sub.keys.p256dh), auth = ub64(sub.keys.auth);
+  const as = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+  const asPub = new Uint8Array(await crypto.subtle.exportKey('raw', as.publicKey));
+  const uaKey = await crypto.subtle.importKey('raw', uaPub, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+  const shared = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: uaKey }, as.privateKey, 256));
+  const ikm = (await hmac(await hmac(auth, shared), cat(enc.encode('WebPush: info\u0000'), uaPub, asPub, new Uint8Array([1])))).slice(0, 32);
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const prk = await hmac(salt, ikm);
+  const cek = (await hmac(prk, cat(enc.encode('Content-Encoding: aes128gcm\u0000'), new Uint8Array([1])))).slice(0, 16);
+  const nonce = (await hmac(prk, cat(enc.encode('Content-Encoding: nonce\u0000'), new Uint8Array([1])))).slice(0, 12);
+  const k = await crypto.subtle.importKey('raw', cek, 'AES-GCM', false, ['encrypt']);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, k, cat(enc.encode(text), new Uint8Array([2]))));
+  const rs = new Uint8Array([0, 0, 16, 0]);
+  return cat(salt, rs, new Uint8Array([asPub.length]), asPub, ct);
+}
+const PUSH_HOSTS = /^https:\/\/(fcm\.googleapis\.com|android\.googleapis\.com|updates\.push\.services\.mozilla\.com|[a-z0-9.-]+\.push\.apple\.com|[a-z0-9.-]+\.notify\.windows\.com)\//;
+const pushOk = (env, ep) => PUSH_HOSTS.test(ep) || (env.PUSH_ALLOW_LOCAL === '1' && /^http:\/\/(localhost|127\.0\.0\.1):\d+\//.test(ep));
+async function sendPush(env, sub, msg) {
+  const { jwt, pub } = await vapidJWT(env, new URL(sub.endpoint).origin);
+  const body = await encryptPush(sub, JSON.stringify(msg));
+  const r = await fetch(sub.endpoint, { method: 'POST', body, headers: { 'Content-Encoding': 'aes128gcm', 'Content-Type': 'application/octet-stream', TTL: '86400', Urgency: 'high', Authorization: 'vapid t=' + jwt + ', k=' + pub } });
+  return r.status;
+}
+// 한 사람의 모든 기기로 보내요. 만료된 구독은 지워요.
+async function pushTo(env, userId, msg) {
+  const rows = (await env.DB.prepare("SELECT id,data FROM docs WHERE col='pushsub' AND owner=?").bind(userId).all()).results || [];
+  let ok = 0;
+  for (const r of rows) {
+    const sub = JSON.parse(r.data);
+    try {
+      const st = await sendPush(env, sub, msg);
+      if (st === 404 || st === 410) await delDoc(env, 'pushsub', r.id); else if (st < 300) ok++;
+    } catch (e) { console.error('push', e); }
+  }
+  return ok;
+}
+async function pushSub(env, ME, b) {
+  const sub = b && b.sub, ep = sub && str(sub.endpoint, 1000);
+  if (!ep || !sub.keys || !sub.keys.p256dh || !sub.keys.auth || !pushOk(env, ep)) return fail('알림을 켜지 못했어요. 다른 브라우저로 시도해 주세요.');
+  const id = 'p' + (await sha(ep)).slice(0, 40);
+  await putDoc(env, 'pushsub', id, { endpoint: ep, keys: { p256dh: str(sub.keys.p256dh, 200), auth: str(sub.keys.auth, 100) }, at: Date.now() }, { owner: ME });
+  return J({ ok: true });
+}
+async function pushUnsub(env, ME, b) {
+  const ep = str(b && b.endpoint, 1000);
+  if (ep) { const id = 'p' + (await sha(ep)).slice(0, 40); const d = await env.DB.prepare("SELECT owner FROM docs WHERE col='pushsub' AND id=?").bind(id).first(); if (d && d.owner === ME) await delDoc(env, 'pushsub', id); }
+  return J({ ok: true });
+}
+// 매일 오후 2시(한국): 내일 레슨·수업이 있는 선수·회원과 코치·트레이너에게 알림
+async function runReminders(env, when) {
+  const kst = new Date((when || Date.now()) + 9 * 3600e3);
+  const t = new Date(kst.getTime() + 864e5).toISOString().slice(0, 10);
+  const WD = ['일', '월', '화', '수', '목', '금', '토'];
+  const label = t.slice(5).replace('-', '.') + '(' + WD[new Date(t + 'T00:00:00Z').getUTCDay()] + ')';
+  const hm = (x) => { const m = /^(\d{2}):(\d{2})$/.exec(x || ''); if (!m) return x || ''; const h = +m[1]; return (h < 12 ? '오전 ' : '오후 ') + ((h % 12) || 12) + '시' + (m[2] !== '00' ? ' ' + (+m[2]) + '분' : ''); };
+  const all = async (q, ...b) => ((await env.DB.prepare(q).bind(...b).all()).results || []).map((r) => JSON.parse(r.data));
+  const golf = (await all("SELECT data FROM docs WHERE col='gclass' AND json_extract(data,'$.date')=?", t)).filter((c) => c.status !== 'done').map((c) => ({ coach: c.coachId, who: c.playerId, time: c.time, memo: c.memo, pt: false }));
+  const pt = (await all("SELECT data FROM docs WHERE col='ptdocs' AND json_extract(data,'$.kind')='class' AND json_extract(data,'$.date')=?", t)).filter((c) => c.status !== 'done').map((c) => ({ coach: c.author, who: c.memberId, time: c.time, memo: c.memo, pt: true }));
+  const list = golf.concat(pt);
+  if (!list.length) return { date: t, sent: 0 };
+  const ids = [...new Set(list.flatMap((x) => [x.coach, x.who]))];
+  const names = {};
+  (await rowsIn(env, 'profiles', 'id', ids)).forEach((r) => { names[r.id] = JSON.parse(r.data).name || ''; });
+  let sent = 0;
+  for (const x of list) {
+    sent += await pushTo(env, x.who, { title: x.pt ? '내일 PT 수업이 있어요' : '내일 레슨이 있어요', body: label + ' ' + hm(x.time) + ' · ' + (names[x.coach] || (x.pt ? '트레이너' : '코치')) + (x.memo ? ' · ' + x.memo : ''), url: x.pt ? '/pt' : '/', tag: 'remind-' + t });
+  }
+  const byCoach = {};
+  list.forEach((x) => { (byCoach[x.coach + (x.pt ? ':pt' : '')] = byCoach[x.coach + (x.pt ? ':pt' : '')] || []).push(x); });
+  for (const k of Object.keys(byCoach)) {
+    const xs = byCoach[k].sort((a, b) => (a.time || '').localeCompare(b.time || '')), pt = k.endsWith(':pt'), c = k.replace(':pt', '');
+    sent += await pushTo(env, c, { title: '내일 ' + (pt ? '수업' : '레슨') + ' ' + xs.length + '건이 있어요', body: label + ' ' + xs.map((x) => hm(x.time) + ' ' + (names[x.who] || '')).join(', '), url: pt ? '/pt' : '/', tag: 'remindc-' + t });
+  }
+  return { date: t, lessons: list.length, sent };
+}
+export async function scheduledReminders(env) { if (env.DB) return await runReminders(env); }
+
 /* ---------------- PT 의견 보내기 ---------------- */
 async function ptFeedback(env, ME, b) {
   const text = str(b.text, 2000).trim();
@@ -856,6 +976,11 @@ export async function onRequest({ request: req, env, params }) {
     const ME = 'u_' + user.id;
 
     if (path === '/me' && m === 'GET') return J({ user, me: ME, admin: await isAdmin(env, user) });
+    if (path === '/push/key' && m === 'GET') return J({ key: (await vapidKeys(env)).pub });
+    if (path === '/push/sub' && m === 'POST') return await pushSub(env, ME, await body(req));
+    if (path === '/push/unsub' && m === 'POST') return await pushUnsub(env, ME, await body(req));
+    if (path === '/push/test' && m === 'POST') { const n = await pushTo(env, ME, { title: 'FeedUp 알림 테스트', body: '알림이 잘 와요! 레슨·수업 하루 전 오후 2시에 알려 드릴게요.', url: '/' }); return n ? J({ ok: true, sent: n }) : fail('이 기기로 알림을 보내지 못했어요. 알림을 껐다가 다시 켜 주세요.'); }
+    if (path === '/admin/remind' && m === 'POST') return (await isAdmin(env, user)) ? J(await runReminders(env, Date.now())) : fail('관리자만 쓸 수 있어요.', 403);
     if (path === '/ptfeedback' && m === 'POST') return await ptFeedback(env, ME, await body(req));
     if (path === '/admin/ptfeedback' && m === 'GET') return (await isAdmin(env, user)) ? await ptFeedbackList(env) : fail('관리자만 볼 수 있어요.', 403);
     if (path === '/admin/sports' && m === 'POST') return (await isAdmin(env, user)) ? await adminSports(env, await body(req)) : fail('관리자만 바꿀 수 있어요.', 403);

@@ -443,6 +443,14 @@ label.mitem{cursor:pointer;border:1.5px dashed var(--line);background:var(--card
 .phcta .link{color:var(--green);font-weight:700;font-size:13px;padding:0;white-space:nowrap}
 .hwcard{border-left:4px solid var(--green)}
 .fbo{font-size:12.5px;color:var(--muted);margin-top:8px}
+
+.remind{display:flex;gap:12px;align-items:center;background:var(--ink);color:var(--paper);border-radius:16px;padding:13px 16px;margin:4px 0 14px}
+.remind .rb{display:flex;width:34px;height:34px;border-radius:17px;background:color-mix(in srgb,var(--paper) 16%,transparent);align-items:center;justify-content:center;flex-shrink:0}
+.remind .rb svg{width:18px;height:18px}
+.remind b{display:block;font-size:15px}.remind small{display:block;opacity:.75;font-size:12.5px;margin-top:2px}
+.gcform .k{font-size:12.5px;font-weight:700;color:var(--muted,#5B616E);margin:10px 0 6px}.gcform .k:first-child{margin-top:0}
+.gcdt{display:grid;grid-template-columns:1fr 1fr;gap:8px}.gcdt input{width:100%;box-sizing:border-box;height:48px;border:1px solid var(--line);border-radius:12px;padding:0 12px;font:inherit;font-size:15px;background:var(--card);color:var(--ink)}
+.prow .rbtn{white-space:nowrap;flex-shrink:0}
 </style>
 </head>
 <body>
@@ -513,7 +521,7 @@ function shotSummaryOf(t,third,withMental){
 const roundTags=r=>roundShots(r).concat((r.misses||[]).filter(isMental));
 const isGood=m=>m===GOOD||/:굿$/.test(m);
 const goodCat=m=>m===GOOD?'기타':CATL(m.split(':')[0]);
-const COLS=['profiles','links','codes','drills','logs','rounds','feedback','reports','lessons','parents','pcodes','consents','homework'];
+const COLS=['profiles','links','codes','drills','logs','rounds','feedback','reports','lessons','parents','pcodes','consents','homework','gclass'];
 const SOLO_DRILLS=[{id:'s1',name:'',target:''},{id:'s2',name:'',target:''},{id:'s3',name:'',target:''}];
 const SPACES={academy:{label:'아카데미',chip:'ACADEMY',desc:'코치·선수·학부모가 함께 쓰는 팀 관리',tags:['연습 체크','레슨','라운드','시합']},solo:{label:'개인 · 개인 레슨',chip:'개인',desc:'혼자 연습하거나, 개인 강사에게 1:1로 레슨받는 선수',tags:['연습 체크','레슨','라운드']}};
 const SOLO=()=>S.space==='solo';
@@ -836,10 +844,66 @@ function vOnboard(){
 }
 
 /* ---------- player: today ---------- */
+/* ---------- 레슨 일정 + 휴대폰 알림 ---------- */
+function gcls(){return Object.entries(Store.data.gclass||{}).map(([id,c])=>Object.assign({},c,{id}));}
+function upcoming(pid,coach){const t=today();return gcls().filter(c=>(coach?c.coachId===ME:c.playerId===pid)&&c.date>=t&&c.status!=='done').sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));}
+function whenLabel(c){const t=today();return c.date===t?'오늘':c.date===addD(t,1)?'내일':md(c.date)+'('+WD[pd(c.date).getDay()]+')';}
+function hm(t){const m=/^(\d{2}):(\d{2})$/.exec(t||'');if(!m)return t||'';const h=+m[1];return (h<12?'오전 ':'오후 ')+((h%12)||12)+'시'+(m[2]!=='00'?' '+(+m[2])+'분':'');}
+function lessonBanner(){
+  const n=upcoming(ME)[0];if(!n)return '';const w=whenLabel(n);if(w!=='오늘'&&w!=='내일')return '';
+  return '<div class="remind"><span class="rb">'+I.lesson+'</span><span><b>'+w+' '+hm(n.time)+' 레슨이 있어요</b><small>'+esc(cName(n.coachId))+' 코치'+(n.memo?' · '+esc(n.memo):'')+'</small></span></div>';
+}
+function gcRow(c,coach){return '<div class="prow"><span><b class="num">'+whenLabel(c)+' '+hm(c.time)+'</b> · '+esc(coach?pName(c.playerId):cName(c.coachId)+' 코치')+(c.memo?' <span class="muted">· '+esc(c.memo)+'</span>':'')+'</span>'+(coach?'<button class="rbtn del" data-act="gcdel" data-v="'+esc(c.id)+'">취소</button>':'')+'</div>';}
+function gcCoach(ps){
+  const up=upcoming(ME,true).filter(c=>S.lessonPlayer==='all'||c.playerId===S.lessonPlayer);
+  let h='<h2>레슨 일정 <small>하루 전 오후 2시에 선수에게 알림</small></h2>';
+  if(S.gc){const g=S.gc;
+    h+='<div class="card gcform"><div class="k">선수</div><div class="pills">'+ps.map(p=>'<button class="pill'+(g.playerId===p?' on':'')+'" data-act="gcp" data-v="'+esc(p)+'">'+esc(pName(p))+'</button>').join('')+'</div>'+
+      '<div class="gcdt"><div><div class="k">날짜</div><input type="date" data-field="gc-date" value="'+esc(g.date)+'" min="'+today()+'"></div><div><div class="k">시간</div><input type="time" data-field="gc-time" value="'+esc(g.time)+'" step="600"></div></div>'+
+      '<div class="k">메모 (선택)</div><input type="text" data-field="gc-memo" value="'+esc(g.memo)+'" maxlength="60" placeholder="예: 드라이버 레슨, 연습장 3층">'+
+      '<div style="display:flex;gap:8px;margin-top:12px"><button class="btn ghost" data-act="gccancel" style="margin:0">닫기</button><button class="btn" data-act="gcsave" style="margin:0">레슨 잡기</button></div></div>';
+  }else h+='<button class="btn ghost" data-act="gcnew" style="margin:0 0 10px">+ 레슨 잡기</button>';
+  h+='<div class="card" style="padding:4px 16px">'+(up.length?up.slice(0,15).map(c=>gcRow(c,true)).join(''):'<p class="muted" style="font-size:14px">잡힌 레슨이 없어요.</p>')+'</div>';
+  return h;
+}
+const PUSH={
+  ok:()=>'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window&&location.protocol==='https:',
+  ios:()=>/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1),
+  home:()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true,
+  st:null,
+  async check(){
+    if(!PUSH.ok()){PUSH.st=PUSH.ios()&&!PUSH.home()?'ios':'no';return;}
+    if(Notification.permission==='denied'){PUSH.st='denied';return;}
+    try{const r=await navigator.serviceWorker.getRegistration();const sub=r&&await r.pushManager.getSubscription();PUSH.st=sub&&Notification.permission==='granted'?'on':'off';}catch(e){PUSH.st='off';}
+  },
+  async on(){
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){PUSH.st=perm==='denied'?'denied':'off';throw new Error('알림을 허용해야 받을 수 있어요.');}
+    const reg=await navigator.serviceWorker.register('/sw.js');await navigator.serviceWorker.ready;
+    const {key}=await API.req('/push/key');
+    const raw=atob(key.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-key.length%4)%4));
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:Uint8Array.from(raw,c=>c.charCodeAt(0))});
+    await API.req('/push/sub',{method:'POST',body:{sub:sub.toJSON()}});PUSH.st='on';
+  },
+  async off(){
+    const r=await navigator.serviceWorker.getRegistration();const sub=r&&await r.pushManager.getSubscription();
+    if(sub){await API.req('/push/unsub',{method:'POST',body:{endpoint:sub.endpoint}}).catch(()=>{});await sub.unsubscribe();}PUSH.st='off';
+  },
+  card(){
+    const st=PUSH.st;if(!st){PUSH.check().then(requestRender);}
+    const t='<b style="display:block">레슨 하루 전 알림</b><small class="muted" style="display:block;font-size:12.5px;margin-top:2px">레슨 전날 오후 2시에 휴대폰으로 알려 드려요</small>';
+    if(st==='on')return '<div class="card"><div class="prow" style="border:0"><span>'+t+'</span><span class="badge match">켜짐</span></div><div style="display:flex;gap:8px"><button class="btn ghost sm" data-act="pushtest" style="margin:0">알림 테스트</button><button class="btn ghost sm" data-act="pushoff" style="margin:0">끄기</button></div></div>';
+    if(st==='ios')return '<div class="card"><div style="margin:0 0 8px">'+t+'</div><p class="muted" style="margin:0;font-size:13.5px">아이폰은 사파리에서 <b>공유 버튼 → 홈 화면에 추가</b>를 한 다음, 홈 화면의 FeedUp으로 열어야 알림을 켤 수 있어요. 알림이 없어도 앱을 열면 레슨 안내가 보여요.</p></div>';
+    if(st==='denied')return '<div class="card"><div style="margin:0 0 8px">'+t+'</div><p class="muted" style="margin:0;font-size:13.5px">이 기기에서 알림이 막혀 있어요. 휴대폰 설정 → 알림(또는 브라우저 사이트 설정)에서 FeedUp 알림을 허용해 주세요.</p></div>';
+    if(st==='no')return '<div class="card"><div style="margin:0 0 8px">'+t+'</div><p class="muted" style="margin:0;font-size:13.5px">이 브라우저는 알림을 지원하지 않아요. 크롬이나 삼성 인터넷에서 열어 주세요. 앱을 열면 레슨 안내는 보여요.</p></div>';
+    return '<div class="card"><div style="margin:0 0 10px">'+t+'</div><button class="btn" data-act="pushon" style="margin:0">'+(st===null?'확인 중…':'알림 켜기')+'</button></div>';
+  }
+};
 function vToday(){
   const p=ME,d=S.date,L=getLog(p,d),gs=groups(p,d),items=allItems(p,d),done=doneOf(L,items),t=today();
   const fut=d>t,isT=d===t,dt=pd(d);
-  let h='<section class="hero"><div><div class="bigdate num">'+md(d)+'</div><div class="sub muted">'+WD[dt.getDay()]+'요일'+(isT?', 오늘':'')+'</div></div>'+
+  let h=lessonBanner()+'<section class="hero"><div><div class="bigdate num">'+md(d)+'</div><div class="sub muted">'+WD[dt.getDay()]+'요일'+(isT?', 오늘':'')+'</div></div>'+
     '<div class="tally"><span class="n num">'+done+'</span><span class="d num">/'+(items.length+unnamedOwn(p))+'</span><div class="lab">완료한 연습</div></div></section>';
   h+='<div class="seg" aria-hidden="true">'+items.map(x=>'<i class="'+(isChk(L,x)?'on':'')+'"></i>').join('')+'<i></i>'.repeat(unnamedOwn(p))+'</div>';
   const ws=monday(d);
@@ -1291,6 +1355,7 @@ function vLessons(){
     let h='<section class="hero"><div><div class="bigdate num">'+list.filter(l=>l.date.slice(0,7)===mon).length+'</div><div class="sub muted">이번 달 선수들이 기록한 내 레슨</div></div></section>';
     h+=SOLO()?'<div style="display:flex;gap:8px;margin:0 0 14px"><button class="btn" data-act="newclesson" style="margin:0;flex:1">레슨 기록하기</button><button class="btn ghost" data-act="newhw" style="margin:0;flex:1">숙제 보내기</button></div>':'<button class="btn" data-act="newhw" style="margin:0 0 14px">숙제 보내기</button>';
     h+='<div class="chips"><button class="'+(S.lessonPlayer==='all'?'on':'')+'" data-act="lpf" data-v="all">모든 선수</button>'+ps.map(x=>'<button class="'+(S.lessonPlayer===x?'on':'')+'" data-act="lpf" data-v="'+esc(x)+'">'+esc(pName(x))+'</button>').join('')+'</div>';
+    if(SOLO())h+=gcCoach(ps);
     if(mine.length)h+='<h2>내가 기록한 레슨 <small>'+mine.length+'개</small></h2>'+mine.slice(0,20).map(l=>lessonCard(l,'coach')).join('');
     if(hws.length)h+='<h2>보낸 숙제 <small>'+hws.length+'개</small></h2>'+hws.slice(0,10).map(x=>hwCard(x,'coach')).join('');
     h+='<h2>선수가 기록한 레슨 <small>'+list.length+'개</small></h2>';
@@ -1300,6 +1365,8 @@ function vLessons(){
   const list=lessonsOf(ME),hws=allHw().filter(x=>x.playerId===ME).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
   let h='<section class="hero"><div><div class="bigdate num">'+list.filter(l=>l.date.slice(0,7)===mon).length+'</div><div class="sub muted">이번 달 받은 레슨</div></div><div class="tally"><span class="n num">'+list.length+'</span><div class="lab">전체 레슨</div></div></section>';
   h+='<button class="btn" data-act="newlesson" style="margin:0 0 16px">레슨 기록하기</button>';
+  const nx=upcoming(ME);
+  if(nx.length)h+='<h2 style="margin-top:4px">다음 레슨</h2><div class="card" style="padding:4px 16px">'+nx.slice(0,3).map(c=>gcRow(c,false)).join('')+'</div>';
   if(hws.length)h+='<h2 style="margin-top:4px">코치가 보낸 숙제</h2>'+hws.slice(0,3).map(x=>hwCard(x,'player')).join('')+'<h2>레슨 기록</h2>';
   if(!list.length)return h+'<div class="empty">레슨이 끝나면 배운 내용과 숙제를 적고 사진이나 짧은 영상을 남겨 보세요. 숙제는 오늘 체크리스트에 자동으로 들어가요.</div>';
   return h+list.map(l=>lessonCard(l,'player')).join('');
@@ -1603,6 +1670,7 @@ function vMe(){
   h+='<h2>자녀 기록 보기 <span class="prem">프리미엄</span></h2><div class="card"><p style="margin:0" class="muted">학부모라면 자녀에게 받은 학부모 코드를 입력하세요.</p>'+
     '<div class="addline"><input type="text" data-field="pjoin" placeholder="자녀에게 받은 코드 6자리" value="'+esc(S.drafts.pjoin||'')+'" autocapitalize="characters" maxlength="8"><button class="btn sm" data-act="pjoin">연결</button></div>'+
     (kl.length?'<div style="margin-top:10px">'+kl.map(l=>'<div class="prow"><span>'+esc(pName(l.playerId))+'</span><button class="rbtn del" data-act="unparent" data-v="'+esc(l.id)+'">연결 해제</button></div>').join('')+'</div>'+(S.mode!=='parent'?'<button class="btn" data-act="mode" data-v="parent">학부모 모드로 가기</button>':''):'')+'</div>';
+  h+='<h2>휴대폰 알림</h2>'+PUSH.card();
   h+='<h2>계정</h2><div class="card"><p style="margin:0" class="muted">'+esc(USER?USER.email:'')+'</p><button class="btn ghost" data-act="logout">로그아웃</button></div>';
   if(S.admin)h+='<h2>관리자</h2><a class="btn" href="/admin" style="text-decoration:none">관리자 페이지 열기</a>';
   h+='<h2>약관 및 정책</h2><div class="card" style="padding:4px 16px">'+[['terms','서비스 이용약관'],['paid','유료서비스 이용약관 및 환불 규정'],['privacy','개인정보 처리방침']].map(x=>'<button class="prow" style="width:100%;text-align:left;font-weight:500" data-act="terms" data-v="'+x[0]+'"><span>'+x[1]+'</span>'+I.right.replace('<svg','<svg width="16" height="16"')+'</button>').join('')+'</div>';
@@ -1647,6 +1715,16 @@ document.addEventListener('click',async e=>{
       if(!n){toast('이름을 입력하세요.');break;}
       await Store.set('profiles',ME,{name:n,share:false,field:FIELD.id,createdAt:Date.now()});delete S.drafts.name;render();break;}
     case'authmode':S.authMode=v;S.authErr='';render();break;
+    case'gcnew':{const ps=playersOf(ME);S.gc={playerId:S.lessonPlayer!=='all'?S.lessonPlayer:(ps.length===1?ps[0]:''),date:addD(today(),1),time:'19:00',memo:''};render();break;}
+    case'gcp':if(S.gc){S.gc.playerId=v;render();}break;
+    case'gccancel':S.gc=null;render();break;
+    case'gcsave':{const g=S.gc;if(!g)break;if(!g.playerId){toast('선수를 골라 주세요.');break;}if(!g.date||!/^\d{2}:\d{2}$/.test(g.time||'')){toast('날짜와 시간을 넣어 주세요.');break;}if(g.date<today()){toast('지난 날짜에는 잡을 수 없어요.');break;}
+      Store.set('gclass','gc'+uid(),{coachId:ME,playerId:g.playerId,date:g.date,time:g.time,memo:(g.memo||'').trim(),status:'booked',space:S.space||'solo',createdAt:Date.now()});
+      toast(pName(g.playerId)+'님 '+md(g.date)+' '+hm(g.time)+' 레슨을 잡았어요.');S.gc=null;render();break;}
+    case'gcdel':{const c=(Store.data.gclass||{})[v];if(!c)break;ask(pName(c.playerId)+'님 '+md(c.date)+' '+hm(c.time)+' 레슨을 취소할까요?','레슨 취소',()=>{Store.del('gclass',v);render();},true);break;}
+    case'pushon':try{await PUSH.on();toast('알림을 켰어요. 레슨 전날 오후 2시에 알려 드려요.');}catch(err){toast(err.message||'알림을 켜지 못했어요.');}render();break;
+    case'pushoff':try{await PUSH.off();toast('알림을 껐어요.');}catch(err){}render();break;
+    case'pushtest':try{await API.req('/push/test',{method:'POST'});toast('테스트 알림을 보냈어요.');}catch(err){toast(err.message);}break;
     case'suspace':S.drafts.space=v;S.authErr='';render();break;
     case'gosport':lsSet('fu_sport','pt');location.href='/pt';break;
     case'sport':S.drafts.sport=v;if(v==='pt')delete S.drafts.space;S.authErr='';render();break;
@@ -1805,6 +1883,8 @@ document.addEventListener('input',e=>{
   const el=e.target,f=el.dataset&&el.dataset.field;if(!f)return;
   const v=el.value;
   if(f==='memo')updateLog(ME,S.date,{memo:v},700);
+  else if(f==='gc-memo'){if(S.gc)S.gc.memo=v;}
+  else if((f==='gc-date'||f==='gc-time')&&S.gc){if(v)S.gc[f.slice(3)]=v;}
   else if(f==='r-course')S.round.course=v;
   else if(f==='m-name')S.round.match.name=v;
   else if(f==='m-rank')S.round.match.rank=v.replace(/[^0-9]/g,'');
@@ -1832,7 +1912,7 @@ document.addEventListener('input',e=>{
     if(!USER)b.classList.toggle('ready',authReady());
     else b.classList.toggle('ready',!!v.trim());}}
 });
-document.addEventListener('change',e=>{const el=e.target;if(el.dataset&&el.dataset.field==='hw-date'&&el.value&&S.hwEdit)S.hwEdit.date=el.value;if(el.dataset&&el.dataset.field==='mfile'){const f=el.files&&el.files[0];el.value='';if(f){primeAudio();addMedia(f);}return;}if(el.dataset&&el.dataset.field==='fbfile'){const f=el.files&&el.files[0],ref=el.dataset.ref,pl=el.dataset.p;el.value='';if(f){primeAudio();addFbMedia(f,ref,pl);}return;}if(el.dataset&&el.dataset.field==='l-date'&&el.value&&S.lesson)S.lesson.date=el.value;if(el.dataset&&el.dataset.field==='r-date'&&el.value&&S.round)S.round.date=el.value;});
+document.addEventListener('change',e=>{const el=e.target;if(el.dataset&&(el.dataset.field==='gc-date'||el.dataset.field==='gc-time')&&el.value&&S.gc)S.gc[el.dataset.field.slice(3)]=el.value;if(el.dataset&&el.dataset.field==='hw-date'&&el.value&&S.hwEdit)S.hwEdit.date=el.value;if(el.dataset&&el.dataset.field==='mfile'){const f=el.files&&el.files[0];el.value='';if(f){primeAudio();addMedia(f);}return;}if(el.dataset&&el.dataset.field==='fbfile'){const f=el.files&&el.files[0],ref=el.dataset.ref,pl=el.dataset.p;el.value='';if(f){primeAudio();addFbMedia(f,ref,pl);}return;}if(el.dataset&&el.dataset.field==='l-date'&&el.value&&S.lesson)S.lesson.date=el.value;if(el.dataset&&el.dataset.field==='r-date'&&el.value&&S.round)S.round.date=el.value;});
 document.addEventListener('keydown',e=>{
   if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('div[role=button][data-act]')){e.preventDefault();e.target.click();return;}
   if(e.key==='Enter'&&!USER&&e.target.closest&&e.target.closest('.onb')){const b=document.querySelector('[data-act=auth]');if(b)b.click();return;}
