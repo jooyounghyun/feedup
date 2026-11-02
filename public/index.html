@@ -483,6 +483,7 @@ const DEFAULT_DRILLS=[
 const MISS={
   '티샷':['탑볼','뽕샷','슬라이스','훅','프리샷 루틴'],
   '세컨샷':['뒷땅','탑볼','왼쪽','오른쪽','클럽 선택 미스'],
+  '써드샷':['뒷땅','탑볼','왼쪽','오른쪽','클럽 선택 미스'],
   '어프로치':['타겟 설정','탄도 설정','마음의 결정'],
   '멘탈':['욕심','생각이 많음','동반자의 거슬림','긴장을 많이 함','결과를 생각함'],
   '퍼팅':['롱퍼트','미들퍼트','숏퍼트','오르막 퍼트','내리막 퍼트','거리감','라이 보기','헤드업','집중도 부족']
@@ -498,7 +499,7 @@ function shotSummary(r){
 }
 function shotSummaryOf(t,third,withMental){
   const cats=Object.keys(MISS).filter(c=>c!=='멘탈').concat(withMental?['멘탈']:[]);
-  const rows=cats.map(c=>{const g=t.filter(m=>m===c+':굿').length,mi=t.filter(m=>m.startsWith(c+':')&&!isGood(m)).length;return{c,g,mi};}).filter(x=>x.c!=='멘탈'||x.g||x.mi);
+  const rows=cats.map(c=>{const g=t.filter(m=>m===c+':굿').length,mi=t.filter(m=>m.startsWith(c+':')&&!isGood(m)).length;return{c,g,mi};}).filter(x=>(x.c!=='멘탈'&&x.c!=='써드샷')||x.g||x.mi);
   const G=rows.reduce((a,x)=>a+x.g,0)+t.filter(m=>m===GOOD).length,M=rows.reduce((a,x)=>a+x.mi,0);
   const holes=third.n;
   if(!G&&!M)return '<div class="card ssum"><p class="muted" style="margin:0;font-size:13.5px">아직 기록한 샷 분석이 없어요. 홀마다 굿이나 미스 원인을 고르면 여기에 그날 요약이 나와요.</p></div>';
@@ -1006,7 +1007,7 @@ function vRoundEdit(){
       MISS[cat].map(m=>{const k=cat+':'+m,on=src.includes(k);return '<button class="tag mtag'+(on?' on':'')+'" data-act="miss" data-v="'+esc(k)+'"'+(ro?' disabled':'')+' aria-pressed="'+on+'">'+m+'</button>';}).join('')+'</div></div>';};
   if(!ro){
     x+='<h2>'+(hi+1)+'번 홀 샷 분석 <small>굿 '+gN+'개, 미스 '+mN+'개</small></h2><div class="tags">';
-    Object.keys(MISS).filter(c=>c!=='멘탈').forEach(cat=>{x+='<h4>'+CATL(cat)+'</h4>'+tagRow(cat);});
+    Object.keys(MISS).filter(c=>c!=='멘탈'&&(c!=='써드샷'||h.par===5)).forEach(cat=>{x+='<h4>'+CATL(cat)+'</h4>'+tagRow(cat);});
     x+='</div>';
     if(legacy.length)x+='<p class="muted" style="font-size:12.5px;margin:8px 2px 0">이전 방식으로 라운드 전체에 기록한 샷 분석: '+esc(legacy.map(m=>isGood(m)?goodCat(m)+' 굿':m.replace(':',' / ').replace(/^퍼팅/,'퍼트')).join(', '))+'</p>';
   }else{
@@ -1831,7 +1832,7 @@ document.addEventListener('click',async e=>{
     case'pjoin':{const c=(S.drafts.pjoin||'').trim().toUpperCase().replace(/\s/g,'');if(!c){toast('자녀에게 받은 코드를 입력하세요.');break;}
       try{const j=await API.req('/pjoin',{method:'POST',body:{code:c}});S.drafts.pjoin='';await Store.load();toast((j.childName?j.childName+' ':'')+'자녀와 연결했어요.');setMode('parent');}catch(err){toast(err.message);}break;}
     case'unparent':ask('학부모 연결을 해제할까요?','해제',()=>{Store.del('parents',v);render();},true);break;
-    case'par':{const h=r.holes[S.hole];const rel=h.score?h.score-h.par:null;h.par=+v;if(rel!=null)h.score=h.par+rel;if(h.par===3)h.fw=null;render();break;}
+    case'par':{const h=r.holes[S.hole];const rel=h.score?h.score-h.par:null;h.par=+v;if(rel!=null)h.score=h.par+rel;if(h.par===3)h.fw=null;if(h.par!==5&&h.shots)h.shots=h.shots.filter(m=>!m.startsWith('써드샷:'));render();break;}
     case'sc':{const before=r.holes.filter(x=>x.score).length;const h=r.holes[S.hole];h.score=h.par+(+v);
       const after=r.holes.filter(x=>x.score).length;render();
       if(before<18&&after===18&&!r.memo){toast('18홀 입력 완료! 오늘 샷 분석을 보고 총평을 적어 주세요.');setTimeout(()=>{const el=document.getElementById('sumsec')||document.getElementById('review');if(el)window.scrollTo({top:el.getBoundingClientRect().top+window.scrollY-70,behavior:'smooth'});},400);}
