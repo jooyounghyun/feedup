@@ -205,6 +205,9 @@ async function state(env, ME) {
   toMap(await rowsIn(env, 'homework', 'player', [ME, ...children]), out.homework);
   toMap(await rowsIn(env, 'lessons', 'player', [ME, ...children, ...shared]), out.lessons);
   toMap(await rowsIn(env, 'reports', 'owner', [ME]), out.reports);
+  // 내 스윙 영상: 본인만 봐요
+  out.swings = {};
+  toMap(await rowsIn(env, 'swings', 'player', [ME]), out.swings);
   // 골프 레슨 일정
   out.gclass = {};
   toMap(await rowsIn(env, 'gclass', 'coach', [ME]), out.gclass);
@@ -361,6 +364,29 @@ async function write(env, ME, b) {
         content: str(data.content, 4000), homework: str(data.homework, 1000), media, space: (data.space === 'solo' ? 'solo' : 'academy'),
         createdAt: (cur && cur.createdAt) || Date.now(), updatedAt: Date.now(),
       }, { coach: coachId || null, player: playerId });
+      return J({ ok: true });
+    }
+    case 'swings': {
+      // 선수가 '오늘'에서 혼자 올리는 스윙 영상. 본인만 쓰고 봐요.
+      if (!/^w[a-z0-9]{4,40}$/.test(id)) return deny();
+      const cur = await getDoc(env, col, id);
+      if (cur && cur.playerId !== ME) return deny();
+      if (del) {
+        if (!cur) return J({ ok: true });
+        await removeMedia(env, (cur.media || []).map((m) => m.key));
+        await delDoc(env, col, id); return J({ ok: true });
+      }
+      const prefix = 'sw/' + ME + '/' + id + '/';
+      const media = (Array.isArray(data.media) ? data.media : [])
+        .filter((m) => m && typeof m.key === 'string' && m.key.startsWith(prefix) && !m.key.includes('..') && m.type === 'video')
+        .slice(0, 6).map((m) => ({ key: m.key, type: 'video' }));
+      const keep = new Set(media.map((m) => m.key));
+      await removeMedia(env, ((cur && cur.media) || []).map((m) => m.key).filter((k) => !keep.has(k)));
+      await putDoc(env, col, id, {
+        playerId: ME, date: isDate(data.date) ? data.date : new Date().toISOString().slice(0, 10),
+        space: data.space === 'solo' ? 'solo' : 'academy', memo: str(data.memo, 300), media,
+        createdAt: (cur && cur.createdAt) || Date.now(), updatedAt: Date.now(),
+      }, { player: ME });
       return J({ ok: true });
     }
     case 'homework': {
@@ -540,6 +566,16 @@ async function fbMediaPut(req, env, ME, url) {
   if (!/^u_[a-z0-9]{4,40}$/.test(player) || !(await isActivePlayer(env, ME, player))) return fail('연결된 선수에게만 보낼 수 있어요.', 403);
   return await mediaPutAt(req, env, 'fb/' + player + '/' + ME + '/');
 }
+// 내 스윙 영상: sw/<선수 본인>/<기록 id>/<파일> — 본인만 올리고 봐요
+async function swMediaPut(req, env, ME, url) {
+  const id = str(url.searchParams.get('id') || '', 50);
+  if (!/^w[a-z0-9]{4,40}$/.test(id)) return fail('영상 정보가 올바르지 않아요.');
+  const cur = await getDoc(env, 'swings', id);
+  if (cur && cur.playerId !== ME) return fail('권한이 없어요.', 403);
+  const ct = (req.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  if (!VID_TYPES[ct]) return fail('영상(mp4, mov) 파일만 올릴 수 있어요.');
+  return await mediaPutAt(req, env, 'sw/' + ME + '/' + id + '/');
+}
 async function ptMediaPut(req, env, ME, url) {
   if (!env.MEDIA) return fail('사진·영상 저장소가 아직 설정되지 않았어요.', 503);
   const member = str(url.searchParams.get('member') || ME, 60);
@@ -572,6 +608,12 @@ async function bigStart(env, ME, b) {
     const player = str(b.player || '', 60);
     if (!/^u_[a-z0-9]{4,40}$/.test(player) || !(await isActivePlayer(env, ME, player))) return fail('연결된 선수에게만 보낼 수 있어요.', 403);
     key = 'fb/' + player + '/' + ME + '/' + rand(8) + '.' + VID_TYPES[ct];
+  } else if (b.kind === 'sw') {
+    const id = str(b.id || '', 50);
+    if (!/^w[a-z0-9]{4,40}$/.test(id)) return fail('영상 정보가 올바르지 않아요.');
+    const cur = await getDoc(env, 'swings', id);
+    if (cur && cur.playerId !== ME) return fail('권한이 없어요.', 403);
+    key = 'sw/' + ME + '/' + id + '/' + rand(8) + '.' + VID_TYPES[ct];
   } else if (b.kind === 'pt') {
     const member = str(b.member || ME, 60);
     if (!/^u_[a-z0-9]{4,40}$/.test(member)) return fail('회원 정보가 올바르지 않아요.');
@@ -618,8 +660,9 @@ async function bigDone(env, ME, b) {
 async function mediaGet(req, env, ME, key) {
   if (!env.MEDIA) return fail('사진·영상 저장소가 아직 설정되지 않았어요.', 503);
   const parts = key.split('/');
-  if (parts.length !== 4 || !['lessons', 'pt', 'fb'].includes(parts[0]) || key.includes('..')) return fail('없는 파일이에요.', 404);
-  if (parts[0] === 'pt') { if (parts[1] !== ME && !(await isActivePt(env, ME, parts[1]))) return fail('권한이 없어요.', 403); }
+  if (parts.length !== 4 || !['lessons', 'pt', 'fb', 'sw'].includes(parts[0]) || key.includes('..')) return fail('없는 파일이에요.', 404);
+  if (parts[0] === 'sw') { if (parts[1] !== ME) return fail('권한이 없어요.', 403); }
+  else if (parts[0] === 'pt') { if (parts[1] !== ME && !(await isActivePt(env, ME, parts[1]))) return fail('권한이 없어요.', 403); }
   else if (!(await canSeePlayer(env, ME, parts[1]))) return fail('권한이 없어요.', 403);
   const hasRange = !!req.headers.get('range');
   const obj = await env.MEDIA.get(key, hasRange ? { range: req.headers } : undefined);
@@ -641,6 +684,10 @@ async function mediaGet(req, env, ME, key) {
 }
 async function mediaDelete(env, ME, key) {
   const parts = key.split('/');
+  if (parts.length === 4 && parts[0] === 'sw' && !key.includes('..')) {
+    if (parts[1] !== ME) return fail('권한이 없어요.', 403);
+    await removeMedia(env, [key]); return J({ ok: true });
+  }
   if (parts.length === 4 && (parts[0] === 'pt' || parts[0] === 'fb') && !key.includes('..')) {
     if (parts[2] !== ME) return fail('직접 올린 파일만 지울 수 있어요.', 403);
     await removeMedia(env, [key]); return J({ ok: true });
@@ -673,7 +720,7 @@ async function deleteAccount(req, env, user) {
     // 내가 코치로 보낸 피드백 사진·영상도 지워요
     const myFb = (await env.DB.prepare("SELECT data FROM docs WHERE col='feedback' AND coach=?").bind(ME).all()).results || [];
     await removeMedia(env, myFb.flatMap((r) => (JSON.parse(r.data).media || []).map((m) => m.key)).filter((k) => typeof k === 'string' && k.startsWith('fb/')));
-    for (const prefix of ['lessons/' + ME + '/', 'pt/' + ME + '/', 'fb/' + ME + '/']) {
+    for (const prefix of ['lessons/' + ME + '/', 'pt/' + ME + '/', 'fb/' + ME + '/', 'sw/' + ME + '/']) {
       let cursor;
       do {
         const l = await env.MEDIA.list({ prefix, cursor });
@@ -999,6 +1046,7 @@ export async function onRequest({ request: req, env, params }) {
     if (path === '/upload/done' && m === 'POST') return await bigDone(env, ME, await body(req));
     if (path === '/fbmedia' && m === 'POST') return await fbMediaPut(req, env, ME, new URL(req.url));
     if (path === '/ptmedia' && m === 'POST') return await ptMediaPut(req, env, ME, new URL(req.url));
+    if (path === '/swmedia' && m === 'POST') return await swMediaPut(req, env, ME, new URL(req.url));
     if (path.startsWith('/media/') && (m === 'GET' || m === 'HEAD')) return await mediaGet(req, env, ME, decodeURIComponent(path.slice(7)));
     if (path.startsWith('/media/') && m === 'DELETE') return await mediaDelete(env, ME, decodeURIComponent(path.slice(7)));
     if (path === '/pjoin' && m === 'POST') return await joinParent(env, ME, await body(req));
