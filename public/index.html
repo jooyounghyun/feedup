@@ -351,6 +351,35 @@ label.mitem{cursor:pointer;border:1.5px dashed var(--line);background:var(--card
 .viewer img,.viewer video{max-width:100%;max-height:100%;border-radius:8px}
 .vclose{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:12px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;display:grid;place-items:center}
 .vclose svg{width:20px;height:20px}
+.lseg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:3px;margin:0 0 14px}
+.lseg button{flex:1;padding:9px 0;border-radius:9px;font-weight:700;font-size:14px;color:var(--muted)}
+.lseg button.on{background:var(--green);color:var(--on-ink)}
+.vsum{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted);margin:0 2px 10px}
+.vsum b{color:var(--ink)}
+.vsum button{font-size:13px;font-weight:700;color:var(--green)}
+.vday{display:flex;align-items:baseline;gap:8px;margin:18px 2px 8px;min-width:0}
+.vday b{font-size:15px;font-weight:800;flex:none}
+.vday span{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.vth{position:relative;aspect-ratio:3/4;border-radius:10px;overflow:hidden;background:#111;display:block;width:100%}
+.vth video{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.vth .pl{position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:20px;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+.vth .tg{position:absolute;left:5px;bottom:5px;max-width:calc(100% - 10px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;color:#fff;background:rgba(0,0,0,.6);padding:1px 6px;border-radius:4px}
+.vp{position:fixed;inset:0;z-index:95;background:#000;color:#fff;display:flex;flex-direction:column;touch-action:pan-x}
+.vp .vt{display:flex;justify-content:space-between;align-items:center;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 8px;font-size:14px}
+.vp .vt b{font-weight:800}
+.vp .vx{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;display:grid;place-items:center}
+.vp .vx svg{width:20px;height:20px}
+.vp .vr{min-width:56px;height:34px;border-radius:17px;background:rgba(255,255,255,.15);color:#fff;font-weight:700;font-size:13px}
+.vp .vb{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 6px}
+.vp video{max-width:100%;max-height:100%;border-radius:6px;background:#000}
+.vp .vi{padding:12px 18px 4px}
+.vp .vi .d{font-size:12.5px;color:#9fb3a8}
+.vp .vi .h{font-size:16px;font-weight:800;margin:2px 0 3px}
+.vp .vi .p{font-size:13px;color:#c9d6cf;line-height:1.5;max-height:3em;overflow:hidden}
+.vp .vc{display:flex;justify-content:space-between;gap:10px;padding:10px 16px calc(14px + env(safe-area-inset-bottom,0px))}
+.vp .vc button{flex:1;height:46px;border-radius:23px;background:rgba(255,255,255,.14);color:#fff;font-weight:700;font-size:14px}
+.vp .vc button:disabled{opacity:.3}
 .agwrap{margin-top:24px;border-top:1px solid #E4E7EC;padding-top:12px}
 .agrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .agck{display:flex;align-items:center;gap:10px;padding:9px 0;font-size:14.5px;font-weight:600;color:#0B0B0C;text-align:left}
@@ -628,7 +657,7 @@ const S={
   round:null,roundRO:false,roundSnap:null,hole:0,
   space:null,hwEdit:null,hwSnap:null,
   fbm:{},fbUp:null,fbNew:[],
-  lesson:null,lessonSnap:null,mediaMsg:'',upMsg:'',uploading:0,newKeys:[],viewer:null,rkind:'all',lessonPlayer:'all',child:null,
+  lesson:null,lessonSnap:null,mediaMsg:'',upMsg:'',uploading:0,newKeys:[],viewer:null,rkind:'all',lessonPlayer:'all',lv:'all',vsort:'new',child:null,
   loading:true,drafts:{},dd:{},dlg:null,defaultName:'',ag:{},termsView:null,withdraw:false,authMode:'login',authBusy:false,authErr:'',
   ai:{busy:false,key:null,text:''}
 };
@@ -1340,11 +1369,87 @@ function hwCard(x,viewer){
   if(viewer==='coach')h+='<div class="acts"><span></span><span style="display:flex;gap:6px"><button class="rbtn" data-act="edithw" data-v="'+esc(x.id)+'">수정</button><button class="rbtn del" data-act="delhw" data-v="'+esc(x.id)+'">삭제</button></span></div>';
   return h+'</div>';
 }
+/* ---------- lesson videos (모아보기) ---------- */
+const lessonTitle=l=>(l.topics||[]).join(' · ')||((l.content||'').split('\n')[0].trim())||'레슨';
+function fbInSpace(f){
+  if(f.kind==='lesson'){const l=(Store.data.lessons||{})[f.ref];return !!l&&inSpace(l);}
+  if(f.kind==='round'){const r=(Store.data.rounds||{})[f.ref];return !!r&&inSpace(r);}
+  if(f.kind==='log')return String(f.ref||'').includes('__s__')===SOLO();
+  return false;
+}
+function vItems(){
+  const coach=S.mode==='coach',ps=coach?playersOf(ME):[ME];
+  const pick=coach&&S.lessonPlayer!=='all'?ps.filter(p=>p===S.lessonPlayer):ps,out=[];
+  allLessons().filter(l=>pick.includes(l.playerId)&&(!coach||l.coachId===ME)).forEach(l=>(l.media||[]).forEach((m,i)=>{
+    if(m&&m.type==='video'&&m.key)out.push({key:m.key,date:l.date||'',at:(l.createdAt||0)+i,p:l.playerId,src:'lesson',topic:lessonTitle(l),title:lessonTitle(l),who:coach?pName(l.playerId):lessonCoach(l),memo:l.content||''});
+  }));
+  Object.values(Store.data.feedback||{}).forEach(f=>{
+    if(!f||!pick.includes(f.playerId)||!(f.media||[]).some(m=>m&&m.type==='video')||!fbInSpace(f))return;
+    if(coach&&f.coachId!==ME&&!(prof(f.playerId)&&prof(f.playerId).share))return;
+    const L=f.kind==='lesson'?(Store.data.lessons||{})[f.ref]:null;
+    const title=f.kind==='lesson'?(L?lessonTitle(L)+' · ':'')+'레슨 피드백':f.kind==='round'?'라운드 피드백':'연습 피드백';
+    const topic=L?lessonTitle(L):f.kind==='round'?'라운드 피드백':f.kind==='log'?'연습 피드백':'레슨 피드백';
+    const who=(f.coachId===ME?'내 피드백':cName(f.coachId))+(coach?' → '+pName(f.playerId):'');
+    f.media.forEach((m,i)=>{if(m&&m.type==='video'&&m.key)out.push({key:m.key,date:f.date||'',at:(f.at||0)+i,p:f.playerId,src:'fb',topic,title,who,memo:f.text||''});});
+  });
+  out.sort((a,b)=>b.date.localeCompare(a.date)||b.at-a.at);
+  if(S.vsort==='old')out.reverse();
+  return out;
+}
+const vDate=d=>d?(+d.slice(5,7))+'월 '+(+d.slice(8,10))+'일':'날짜 없음';
+const lSeg=()=>'<div class="lseg" role="tablist"><button class="'+(S.lv!=='video'?'on':'')+'" data-act="lview" data-v="all" role="tab">전체 기록</button><button class="'+(S.lv==='video'?'on':'')+'" data-act="lview" data-v="video" role="tab">영상만 보기</button></div>';
+function vVideos(){
+  const it=vItems(),coach=S.mode==='coach';
+  if(!it.length)return '<div class="empty">아직 모아 볼 영상이 없어요. 레슨 기록이나 코치 피드백에 영상을 올리면 날짜별로 여기에 모여요.</div>';
+  const days=new Set(it.map(x=>x.date)).size;
+  let h='<div class="vsum"><span>영상 <b>'+it.length+'개</b> · '+days+'일</span><button data-act="vsort">'+(S.vsort==='old'?'오래된순':'최신순')+' ⇅</button></div>';
+  h+='<button class="btn" data-act="vplay" data-v="0" style="margin:0 0 4px">▶ 처음부터 이어서 보기</button>';
+  let cur=null;
+  it.forEach((x,i)=>{
+    if(x.date!==cur){
+      if(cur!==null)h+='</div>';
+      cur=x.date;
+      const ts=[...new Set(it.filter(y=>y.date===cur).map(y=>y.topic))].join(' · ');
+      h+='<div class="vday"><b>'+esc(vDate(cur))+'</b><span>'+esc(ts)+'</span></div><div class="vgrid">';
+    }
+    const tag=coach&&S.lessonPlayer==='all'?pName(x.p)+(x.src==='fb'?' · 피드백':''):(x.src==='fb'?'피드백':'');
+    h+='<button class="vth" data-act="vplay" data-v="'+i+'" aria-label="'+esc(vDate(x.date)+' '+x.title+' 영상 보기')+'"><video src="'+mediaUrl(x.key)+'#t=0.1" preload="metadata" muted playsinline></video><span class="pl">▶</span>'+(tag?'<span class="tg">'+esc(tag)+'</span>':'')+'</button>';
+  });
+  return h+'</div>';
+}
+const VP={list:[],i:0,rate:1,el:null,y:null};
+function openVP(i){VP.list=vItems();if(!VP.list.length)return;VP.i=Math.max(0,Math.min(i,VP.list.length-1));drawVP();}
+function closeVP(){if(VP.el){VP.el.remove();VP.el=null;}document.body.style.overflow='';}
+function drawVP(){
+  const x=VP.list[VP.i],n=VP.list.length;
+  if(!VP.el){
+    VP.el=document.createElement('div');VP.el.className='vp';VP.el.setAttribute('role','dialog');VP.el.setAttribute('aria-label','영상 이어보기');
+    document.body.appendChild(VP.el);document.body.style.overflow='hidden';
+    VP.el.addEventListener('click',e=>{const b=e.target.closest('[data-vp]');if(!b)return;const a=b.dataset.vp;
+      if(a==='close')closeVP();
+      else if(a==='prev'&&VP.i>0){VP.i--;drawVP();}
+      else if(a==='next'&&VP.i<VP.list.length-1){VP.i++;drawVP();}
+      else if(a==='rate'){VP.rate=VP.rate===1?0.5:VP.rate===0.5?0.25:1;const v=VP.el.querySelector('video');if(v)v.playbackRate=VP.rate;b.textContent=VP.rate+'×';}});
+    VP.el.addEventListener('touchstart',e=>{VP.y=e.touches[0].clientY;},{passive:true});
+    VP.el.addEventListener('touchend',e=>{if(VP.y==null)return;const dy=e.changedTouches[0].clientY-VP.y;VP.y=null;
+      if(e.target.closest('.vc,.vt'))return;
+      if(dy<-70&&VP.i<VP.list.length-1){VP.i++;drawVP();}else if(dy>70&&VP.i>0){VP.i--;drawVP();}},{passive:true});
+  }
+  VP.el.innerHTML='<div class="vt"><button class="vx" data-vp="close" aria-label="닫기">'+I.x+'</button><b class="num">'+(VP.i+1)+' / '+n+'</b><button class="vr" data-vp="rate" aria-label="재생 속도">'+VP.rate+'×</button></div>'+
+    '<div class="vb"><video src="'+mediaUrl(x.key)+'" controls autoplay playsinline></video></div>'+
+    '<div class="vi"><div class="d">'+esc(vDate(x.date)+' · '+x.who)+'</div><div class="h">'+esc(x.title)+'</div>'+(x.memo?'<div class="p">'+esc(x.memo)+'</div>':'')+'</div>'+
+    '<div class="vc"><button data-vp="prev"'+(VP.i===0?' disabled':'')+'>◀ 이전</button><button data-vp="next"'+(VP.i===n-1?' disabled':'')+'>다음 ▶</button></div>';
+  const v=VP.el.querySelector('video');
+  v.playbackRate=VP.rate;
+  v.addEventListener('loadedmetadata',()=>{v.playbackRate=VP.rate;});
+  v.addEventListener('ended',()=>{if(VP.el&&VP.i<VP.list.length-1){VP.i++;drawVP();}});
+}
 function vLessons(){
   const mon=today().slice(0,7);
   if(S.mode==='coach'){
     const ps=playersOf(ME);
     if(!ps.length)return '<div class="empty" style="margin-top:12px">연결된 선수가 없어요. 아래 초대 코드를 선수에게 알려주세요.</div>'+codeCard();
+    if(S.lv==='video')return lSeg()+'<div class="chips"><button class="'+(S.lessonPlayer==='all'?'on':'')+'" data-act="lpf" data-v="all">모든 선수</button>'+ps.map(x=>'<button class="'+(S.lessonPlayer===x?'on':'')+'" data-act="lpf" data-v="'+esc(x)+'">'+esc(pName(x))+'</button>').join('')+'</div>'+vVideos();
     let list=allLessons().filter(l=>ps.includes(l.playerId)&&l.coachId===ME&&l.author!=='coach');
     let mine=SOLO()?allLessons().filter(l=>ps.includes(l.playerId)&&l.coachId===ME&&l.author==='coach'):[];
     let hws=allHw().filter(x=>x.coachId===ME&&ps.includes(x.playerId));
@@ -1353,7 +1458,7 @@ function vLessons(){
     if(S.lessonPlayer!=='all'){hws=hws.filter(x=>x.playerId===S.lessonPlayer);}
     list.sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
     hws.sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
-    let h='<section class="hero"><div><div class="bigdate num">'+list.filter(l=>l.date.slice(0,7)===mon).length+'</div><div class="sub muted">이번 달 선수들이 기록한 내 레슨</div></div></section>';
+    let h=lSeg()+'<section class="hero"><div><div class="bigdate num">'+list.filter(l=>l.date.slice(0,7)===mon).length+'</div><div class="sub muted">이번 달 선수들이 기록한 내 레슨</div></div></section>';
     h+=SOLO()?'<div style="display:flex;gap:8px;margin:0 0 14px"><button class="btn" data-act="newclesson" style="margin:0;flex:1">레슨 기록하기</button><button class="btn ghost" data-act="newhw" style="margin:0;flex:1">숙제 보내기</button></div>':'<button class="btn" data-act="newhw" style="margin:0 0 14px">숙제 보내기</button>';
     h+='<div class="chips"><button class="'+(S.lessonPlayer==='all'?'on':'')+'" data-act="lpf" data-v="all">모든 선수</button>'+ps.map(x=>'<button class="'+(S.lessonPlayer===x?'on':'')+'" data-act="lpf" data-v="'+esc(x)+'">'+esc(pName(x))+'</button>').join('')+'</div>';
     if(SOLO())h+=gcCoach(ps);
@@ -1364,7 +1469,8 @@ function vLessons(){
     return h+list.map(l=>lessonCard(l,'coach')).join('');
   }
   const list=lessonsOf(ME),hws=allHw().filter(x=>x.playerId===ME).sort((a,b)=>b.date.localeCompare(a.date)||(b.createdAt||0)-(a.createdAt||0));
-  let h='<section class="hero"><div><div class="bigdate num">'+list.filter(l=>l.date.slice(0,7)===mon).length+'</div><div class="sub muted">이번 달 받은 레슨</div></div><div class="tally"><span class="n num">'+list.length+'</span><div class="lab">전체 레슨</div></div></section>';
+  if(S.lv==='video')return lSeg()+vVideos();
+  let h=lSeg()+'<section class="hero"><div><div class="bigdate num">'+list.filter(l=>l.date.slice(0,7)===mon).length+'</div><div class="sub muted">이번 달 받은 레슨</div></div><div class="tally"><span class="n num">'+list.length+'</span><div class="lab">전체 레슨</div></div></section>';
   h+='<button class="btn" data-act="newlesson" style="margin:0 0 16px">레슨 기록하기</button>';
   const nx=upcoming(ME);
   if(nx.length)h+='<h2 style="margin-top:4px">다음 레슨</h2><div class="card" style="padding:4px 16px">'+nx.slice(0,3).map(c=>gcRow(c,false)).join('')+'</div>';
@@ -1791,6 +1897,9 @@ document.addEventListener('click',async e=>{
     case'mtension':r.match.tension=+r.match.tension===+v?0:+v;render();break;
     case'kid':S.child=v;S.ai={busy:false,key:null,text:''};render();break;
     case'lpf':S.lessonPlayer=v;render();break;
+    case'lview':S.lv=v;render();break;
+    case'vsort':S.vsort=S.vsort==='old'?'new':'old';render();break;
+    case'vplay':openVP(+v||0);break;
     case'newhw':{const ps=playersOf(ME);S.hwEdit=newHw(S.lessonPlayer!=='all'?S.lessonPlayer:(ps.length===1?ps[0]:''));S.hwSnap=JSON.stringify(S.hwEdit);render();try{window.scrollTo(0,0);}catch(e){}break;}
     case'edithw':{const src=(Store.data.homework||{})[v];if(!src)break;S.hwEdit=Object.assign({},src,{id:v});S.hwSnap=JSON.stringify(S.hwEdit);render();try{window.scrollTo(0,0);}catch(e){}break;}
     case'hwp':S.hwEdit.playerId=v;render();break;
@@ -1914,7 +2023,7 @@ document.addEventListener('input',e=>{
     else b.classList.toggle('ready',!!v.trim());}}
 });
 document.addEventListener('change',e=>{const el=e.target;if(el.dataset&&(el.dataset.field==='gc-date'||el.dataset.field==='gc-time')&&el.value&&S.gc)S.gc[el.dataset.field.slice(3)]=el.value;if(el.dataset&&el.dataset.field==='hw-date'&&el.value&&S.hwEdit)S.hwEdit.date=el.value;if(el.dataset&&el.dataset.field==='mfile'){const f=el.files&&el.files[0];el.value='';if(f){primeAudio();addMedia(f);}return;}if(el.dataset&&el.dataset.field==='fbfile'){const f=el.files&&el.files[0],ref=el.dataset.ref,pl=el.dataset.p;el.value='';if(f){primeAudio();addFbMedia(f,ref,pl);}return;}if(el.dataset&&el.dataset.field==='l-date'&&el.value&&S.lesson)S.lesson.date=el.value;if(el.dataset&&el.dataset.field==='r-date'&&el.value&&S.round)S.round.date=el.value;});
-document.addEventListener('keydown',e=>{
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&VP.el){closeVP();return;}
   if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('div[role=button][data-act]')){e.preventDefault();e.target.click();return;}
   if(e.key==='Enter'&&!USER&&e.target.closest&&e.target.closest('.onb')){const b=document.querySelector('[data-act=auth]');if(b)b.click();return;}
   if(e.key==='Escape'&&S.viewer){S.viewer=null;render();return;}
