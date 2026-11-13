@@ -356,6 +356,14 @@ label.mitem{cursor:pointer;border:1.5px dashed var(--line);background:var(--card
 .addrow b{font-size:14px;font-weight:700;color:var(--ink);flex:none}
 .addrow span{font-size:12px;color:var(--muted);text-align:right}
 .swcard .mgrid{margin-top:0}
+.swpick{display:flex;flex-direction:column;gap:10px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.swpick video{width:100%;max-height:340px;border-radius:12px;background:#000}
+.swpk-t{display:flex;flex-direction:column;gap:2px}
+.swpk-t b{font-size:15px}
+.swpk-t span{font-size:12.5px;color:var(--muted)}
+.swpk-b{display:grid;grid-template-columns:1fr 2fr;gap:8px}
+.swpk-b .btn{margin:0}
+.swerr{margin:8px 2px 0;font-size:13px;font-weight:600;color:var(--flag)}
 .swfoot{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12.5px;margin-top:8px}
 .swfoot .link{font-size:13px;font-weight:700;color:var(--green)}
 .lseg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:3px;margin:0 0 14px}
@@ -664,7 +672,7 @@ const S={
   round:null,roundRO:false,roundSnap:null,hole:0,
   space:null,hwEdit:null,hwSnap:null,
   fbm:{},fbUp:null,fbNew:[],
-  lesson:null,lessonSnap:null,mediaMsg:'',upMsg:'',uploading:0,newKeys:[],viewer:null,rkind:'all',lessonPlayer:'all',lv:'all',vsort:'new',swUp:null,child:null,
+  lesson:null,lessonSnap:null,mediaMsg:'',upMsg:'',uploading:0,newKeys:[],viewer:null,rkind:'all',lessonPlayer:'all',lv:'all',vsort:'new',swUp:null,swPick:null,swErr:null,child:null,
   loading:true,drafts:{},dd:{},dlg:null,defaultName:'',ag:{},termsView:null,withdraw:false,authMode:'login',authBusy:false,authErr:'',
   ai:{busy:false,key:null,text:''}
 };
@@ -1387,17 +1395,21 @@ function hwCard(x,viewer){
 /* ---------- 내 스윙 영상 (오늘 탭) ---------- */
 const swingsOf=(p,d)=>Object.entries(Store.data.swings||{}).map(([id,w])=>Object.assign({},w,{id})).filter(w=>w.playerId===p&&inSpace(w)&&(!d||w.date===d)).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
 function swingBox(d){
-  const list=swingsOf(ME,d),all=swingsOf(ME).length,up=S.swUp;
+  const list=swingsOf(ME,d),all=swingsOf(ME).length,up=S.swUp,pk=S.swPick;
   let h='<h2>내 스윙 영상 <small>나만 볼 수 있어요</small></h2><div class="card swcard">';
+  if(pk&&!up)h+='<div class="swpick"><video src="'+pk.url+'" controls playsinline muted preload="metadata"></video><div class="swpk-t"><b>이 영상을 올릴까요?</b><span>'+esc(md(pk.d))+' 스윙 영상으로 저장돼요</span></div><div class="swpk-b"><button class="btn ghost" data-act="swcancel">취소</button><button class="btn" data-act="swupload">올리기</button></div></div>';
   h+='<div class="mgrid">'+list.map(w=>(w.media||[]).filter(m=>m.type==='video').map(m=>'<div class="mitem"><button class="mthumb" data-act="viewmedia" data-k="'+esc(m.key)+'" data-t="video" aria-label="스윙 영상 보기"><video src="'+mediaUrl(m.key)+'#t=0.1" preload="metadata" muted playsinline></video><span class="play">▶</span></button><button class="mdel" data-act="swdel" data-v="'+esc(w.id)+'" aria-label="영상 지우기">'+I.x+'</button></div>').join('')).join('')+
-    (up?'<div class="mitem"><div class="mup" id="swup">'+esc(up.msg||'올리는 중…')+'</div></div>':'<label class="mitem"><span class="madd"><b>+</b>영상</span><input type="file" class="mfile" accept="video/*" data-field="swfile" aria-label="스윙 영상 올리기"></label>')+'</div>';
+    (up?'<div class="mitem"><div class="mup" id="swup">'+esc(up.msg||'올리는 중…')+'</div></div>':pk?'':'<label class="mitem"><span class="madd"><b>+</b>영상</span><input type="file" class="mfile" accept="video/*" data-field="swfile" aria-label="스윙 영상 고르기"></label>')+'</div>';
+  if(S.swErr)h+='<p class="swerr" role="alert">'+esc(S.swErr)+'</p>';
   h+='<div class="swfoot"><span class="muted">'+(list.length?'이 날 '+list.length+'개':'메모 없이 영상만 올려도 돼요. 1분 이내')+'</span>'+(all?'<button class="link" data-act="swall">모아보기 ('+all+') →</button>':'')+'</div></div>';
   return h;
 }
+function swClear(){if(S.swPick){try{URL.revokeObjectURL(S.swPick.url);}catch(e){}}S.swPick=null;}
+function swPick(file,d){swClear();S.swErr=null;let url='';try{url=URL.createObjectURL(file);}catch(e){}S.swPick={file,d,url};render();}
 async function addSwing(file,d){
   if(S.swUp){toast('올리는 중이에요. 잠시만 기다려 주세요.');return;}
   const name=(file.name||'').toLowerCase(),type=(file.type||'').toLowerCase();
-  if(!(type.startsWith('video/')||/\.(mov|mp4|m4v|webm)$/.test(name))){toast('영상 파일만 올릴 수 있어요.');return;}
+  if(!(type.startsWith('video/')||/\.(mov|mp4|m4v|webm)$/.test(name))){S.swErr='영상 파일만 올릴 수 있어요.';render();return;}
   const id='w'+uid();
   const say=m=>{if(!S.swUp)return;S.swUp.msg=m;const el=document.getElementById('swup');if(el)el.textContent=m;};
   S.swUp={msg:'준비 중…'};render();
@@ -1405,8 +1417,8 @@ async function addSwing(file,d){
     const j=await uploadAny(file,'/api/swmedia?id='+id,{kind:'sw',id},say);
     if(!j||!j.key)throw new Error('올리지 못했어요.');
     await Store.set('swings',id,{playerId:ME,date:d,space:S.space||'academy',memo:'',media:[{key:j.key,type:'video'}],createdAt:Date.now()});
-    toast('스윙 영상을 저장했어요.');
-  }catch(e){toast(e.message||'올리지 못했어요.');}
+    S.swErr=null;toast('스윙 영상을 올렸어요.');
+  }catch(e){S.swErr=(e&&e.message)||'올리지 못했어요. 다시 시도해 주세요.';toast(S.swErr);}
   S.swUp=null;render();
 }
 
@@ -1944,6 +1956,8 @@ document.addEventListener('click',async e=>{
     case'lview':S.lv=v;render();break;
     case'vsort':S.vsort=S.vsort==='old'?'new':'old';render();break;
     case'vplay':openVP(+v||0);break;
+    case'swupload':{const pk=S.swPick;if(!pk)break;S.swPick=null;addSwing(pk.file,pk.d).finally(()=>{try{URL.revokeObjectURL(pk.url);}catch(e){}});break;}
+    case'swcancel':swClear();S.swErr=null;render();break;
     case'swall':S.tab='lessons';S.lv='video';render();try{window.scrollTo(0,0);}catch(e){}break;
     case'swdel':ask('이 스윙 영상을 지울까요? 지우면 되돌릴 수 없어요.','지우기',()=>{Store.del('swings',v);render();},true);break;
     case'newhw':{const ps=playersOf(ME);S.hwEdit=newHw(S.lessonPlayer!=='all'?S.lessonPlayer:(ps.length===1?ps[0]:''));S.hwSnap=JSON.stringify(S.hwEdit);render();try{window.scrollTo(0,0);}catch(e){}break;}
@@ -2068,7 +2082,7 @@ document.addEventListener('input',e=>{
     if(!USER)b.classList.toggle('ready',authReady());
     else b.classList.toggle('ready',!!v.trim());}}
 });
-document.addEventListener('change',e=>{const el=e.target;if(el.dataset&&(el.dataset.field==='gc-date'||el.dataset.field==='gc-time')&&el.value&&S.gc)S.gc[el.dataset.field.slice(3)]=el.value;if(el.dataset&&el.dataset.field==='hw-date'&&el.value&&S.hwEdit)S.hwEdit.date=el.value;if(el.dataset&&el.dataset.field==='mfile'){const f=el.files&&el.files[0];el.value='';if(f){primeAudio();addMedia(f);}return;}if(el.dataset&&el.dataset.field==='swfile'){const f=el.files&&el.files[0];el.value='';if(f){primeAudio();addSwing(f,S.date);}return;}if(el.dataset&&el.dataset.field==='fbfile'){const f=el.files&&el.files[0],ref=el.dataset.ref,pl=el.dataset.p;el.value='';if(f){primeAudio();addFbMedia(f,ref,pl);}return;}if(el.dataset&&el.dataset.field==='l-date'&&el.value&&S.lesson)S.lesson.date=el.value;if(el.dataset&&el.dataset.field==='r-date'&&el.value&&S.round)S.round.date=el.value;});
+document.addEventListener('change',e=>{const el=e.target;if(el.dataset&&(el.dataset.field==='gc-date'||el.dataset.field==='gc-time')&&el.value&&S.gc)S.gc[el.dataset.field.slice(3)]=el.value;if(el.dataset&&el.dataset.field==='hw-date'&&el.value&&S.hwEdit)S.hwEdit.date=el.value;if(el.dataset&&el.dataset.field==='mfile'){const f=el.files&&el.files[0];el.value='';if(f){primeAudio();addMedia(f);}return;}if(el.dataset&&el.dataset.field==='swfile'){const f=el.files&&el.files[0];el.value='';if(f){primeAudio();swPick(f,S.date);}return;}if(el.dataset&&el.dataset.field==='fbfile'){const f=el.files&&el.files[0],ref=el.dataset.ref,pl=el.dataset.p;el.value='';if(f){primeAudio();addFbMedia(f,ref,pl);}return;}if(el.dataset&&el.dataset.field==='l-date'&&el.value&&S.lesson)S.lesson.date=el.value;if(el.dataset&&el.dataset.field==='r-date'&&el.value&&S.round)S.round.date=el.value;});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&VP.el){closeVP();return;}
   if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('div[role=button][data-act]')){e.preventDefault();e.target.click();return;}
   if(e.key==='Enter'&&!USER&&e.target.closest&&e.target.closest('.onb')){const b=document.querySelector('[data-act=auth]');if(b)b.click();return;}
