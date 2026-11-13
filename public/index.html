@@ -732,7 +732,7 @@ function updateLog(p,d,patch,delay){
   pend[id]=next;clearTimeout(timers[id]);
   timers[id]=setTimeout(()=>{const v=pend[id];Store.set('logs',id,v).then(()=>{if(pend[id]===v)delete pend[id];});},delay==null?500:delay);
 }
-function flushLogs(){Object.keys(timers).forEach(id=>{clearTimeout(timers[id]);if(pend[id]){const v=pend[id];Store.set('logs',id,v);delete pend[id];}});}
+function flushLogs(){flushDrills();Object.keys(timers).forEach(id=>{clearTimeout(timers[id]);if(pend[id]){const v=pend[id];Store.set('logs',id,v);delete pend[id];}});}
 
 /* ---------- feedback ---------- */
 const fbId=(c,kind,ref)=>c+'__'+kind+'__'+ref;
@@ -1310,12 +1310,22 @@ function vInbox(){
 }
 
 /* ---------- coach: players ---------- */
+const drillTimers={};
+function drillDocId(w){return w==='me'?(SOLO()?'s_'+ME:ME):'c_'+ME;}
+function saveDrills(w){
+  clearTimeout(drillTimers[w]);delete drillTimers[w];
+  if(!S.dd[w])return;
+  const list=S.dd[w].filter(d=>(d.name||'').trim()).map(d=>({id:d.id,name:d.name.trim(),target:(d.target||'').trim(),desc:d.desc||''}));
+  return Store.set('drills',drillDocId(w),{list,updatedAt:Date.now()});
+}
+function saveDrillsSoon(w){clearTimeout(drillTimers[w]);drillTimers[w]=setTimeout(()=>saveDrills(w),600);}
+function flushDrills(){Object.keys(drillTimers).forEach(w=>saveDrills(w));}
 function drillEditor(w,title,note){
   if(!S.dd[w])S.dd[w]=(w==='me'?ownDrills(ME):coachDrills(ME)).map(d=>Object.assign({},d));
   const L=S.dd[w];
   return '<h2>'+title+' <small>'+note+'</small></h2><div class="card" style="padding:12px">'+
     (L.length?L.map((d,i)=>'<div class="setrow"><input type="text" data-field="dn" data-w="'+w+'" data-i="'+i+'" value="'+esc(d.name)+'" placeholder="항목 이름" aria-label="항목 이름"><input type="text" data-field="dt" data-w="'+w+'" data-i="'+i+'" value="'+esc(d.target||'')+'" placeholder="목표" aria-label="목표"><button class="iconbtn" data-act="deldrill" data-w="'+w+'" data-v="'+i+'" aria-label="항목 삭제">'+I.x+'</button></div>').join(''):'<p class="muted" style="font-size:14px;margin:4px 4px 8px">항목이 없어요.</p>')+
-    '<button class="btn ghost" data-act="adddrill" data-w="'+w+'" style="margin-top:6px">항목 추가</button></div><button class="btn" data-act="savedrills" data-w="'+w+'">저장</button>';
+    '<button class="btn ghost" data-act="adddrill" data-w="'+w+'" style="margin-top:6px">항목 추가</button><p class="muted" style="font-size:12.5px;margin:8px 2px 0">쓰거나 지우면 바로 저장돼요.</p></div>';
 }
 function myCode(){const me=prof(ME);if(!me)return null;const c=(me.codes&&me.codes.golf)||(fieldOf(me)==='golf'?me.code:null);return c&&Store.data.codes[c]&&Store.data.codes[c].coachId===ME?c:null;}
 function codeCard(){
@@ -2019,7 +2029,7 @@ document.addEventListener('click',async e=>{
     case'share':await Store.update('profiles',ME,{share:!prof(ME).share});render();break;
     case'savename':{const n=(S.drafts.myname||'').trim();if(!n){toast('이름을 입력하세요.');break;}await Store.update('profiles',ME,{name:n});delete S.drafts.myname;toast('이름을 바꿨어요.');render();break;}
     case'adddrill':S.dd[w].push({id:'d'+uid(),name:'',target:''});render();break;
-    case'deldrill':S.dd[w].splice(+v,1);render();break;
+    case'deldrill':S.dd[w].splice(+v,1);saveDrills(w);render();toast('지웠어요.');break;
     case'savedrills':{
       const list=S.dd[w].filter(d=>d.name.trim()||(w==='me'&&SOLO())).map(d=>({id:d.id,name:d.name.trim(),target:(d.target||'').trim(),desc:d.desc||''}));
       await Store.set('drills',w==='me'?(SOLO()?'s_'+ME:ME):'c_'+ME,{list,updatedAt:Date.now()});delete S.dd[w];toast('연습 항목을 저장했어요.');render();break;}
@@ -2049,8 +2059,8 @@ document.addEventListener('input',e=>{
   else if(f==='r-memo')S.round.memo=v;
   else if(f==='h-note')S.round.holes[S.hole].note=v;
   else if(f==='fb')S.drafts[el.dataset.ref]=v;
-  else if(f==='dn')S.dd[el.dataset.w][+el.dataset.i].name=v;
-  else if(f==='dt')S.dd[el.dataset.w][+el.dataset.i].target=v;
+  else if(f==='dn'){S.dd[el.dataset.w][+el.dataset.i].name=v;saveDrillsSoon(el.dataset.w);}
+  else if(f==='dt'){S.dd[el.dataset.w][+el.dataset.i].target=v;saveDrillsSoon(el.dataset.w);}
   else S.drafts[f]=v;
   if(['ag-gname','ag-gphone'].includes(f)){const b=document.querySelector('.onb .go');if(b)b.classList.toggle('ready',USER?agOk():authReady());}
   if(f==='pw'||f==='pw2'){const m=document.getElementById('pwmatch');if(m){m.textContent=pwMatchText();m.setAttribute('style','margin-top:8px;font-weight:700;'+pwMatchStyle());}}
