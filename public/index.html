@@ -352,6 +352,9 @@ label.mitem{cursor:pointer;border:1.5px dashed var(--line);background:var(--card
 .vclose{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:12px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;display:grid;place-items:center}
 .vclose svg{width:20px;height:20px}
 .swcard{padding:12px 12px 10px}
+.addrow{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;margin:12px 0 4px;padding:12px 14px;border:1.5px dashed var(--line);border-radius:12px;background:none;text-align:left}
+.addrow b{font-size:14px;font-weight:700;color:var(--ink);flex:none}
+.addrow span{font-size:12px;color:var(--muted);text-align:right}
 .swcard .mgrid{margin-top:0}
 .swfoot{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12.5px;margin-top:8px}
 .swfoot .link{font-size:13px;font-weight:700;color:var(--green)}
@@ -936,10 +939,10 @@ const PUSH={
 };
 function vToday(){
   const p=ME,d=S.date,L=getLog(p,d),gs=groups(p,d),items=allItems(p,d),done=doneOf(L,items),t=today();
-  const fut=d>t,isT=d===t,dt=pd(d);
+  const fut=d>t,isT=d===t,dt=pd(d),has=items.length>0;
   let h=lessonBanner()+'<section class="hero"><div><div class="bigdate num">'+md(d)+'</div><div class="sub muted">'+WD[dt.getDay()]+'요일'+(isT?', 오늘':'')+'</div></div>'+
-    '<div class="tally"><span class="n num">'+done+'</span><span class="d num">/'+(items.length+unnamedOwn(p))+'</span><div class="lab">완료한 연습</div></div></section>';
-  h+='<div class="seg" aria-hidden="true">'+items.map(x=>'<i class="'+(isChk(L,x)?'on':'')+'"></i>').join('')+'<i></i>'.repeat(unnamedOwn(p))+'</div>';
+    (has?'<div class="tally"><span class="n num">'+done+'</span><span class="d num">/'+items.length+'</span><div class="lab">완료한 연습</div></div>':'')+'</section>';
+  if(has)h+='<div class="seg" aria-hidden="true">'+items.map(x=>'<i class="'+(isChk(L,x)?'on':'')+'"></i>').join('')+'</div>';
   const ws=monday(d);
   h+='<div class="week"><button class="nav" data-act="wk" data-v="-7" aria-label="이전 주">'+I.left+'</button>';
   for(let i=0;i<7;i++){
@@ -947,19 +950,16 @@ function vToday(){
     h+='<button class="day'+(day===d?' sel':'')+(day===t?' today':'')+(day>t?' fut':'')+'" data-act="date" data-v="'+day+'"><div class="w">'+WD[pd(day).getDay()]+'</div><div class="dn num">'+pd(day).getDate()+'</div><div class="fill"><b style="width:'+Math.round(pc*100)+'%"></b></div></button>';
   }
   h+='<button class="nav" data-act="wk" data-v="7" aria-label="다음 주">'+I.right+'</button></div>';
-  const un=unnamedOwn(p);
-  const ph=n=>Array.from({length:n},(_,i)=>'<button class="drill ph" data-act="gotodrills"><span class="box"></span><span><div class="nm">연습 항목 '+(ownDrills(p).filter(d=>(d.name||'').trim()).length+i+1)+'</div><div class="ds">눌러서 이름 정하기</div></span><span class="tg num"></span></button>').join('');
-  if(!items.length&&!un)h+='<div class="empty">연습 항목이 없어요. 내 정보에서 항목을 추가하거나 코치와 연결해 보세요.</div>';
-  else h+='<div class="list">'+gs.filter(g=>g.items.length||(g.owner==='me'&&un)).map(g=>{
+  const list=has?'<div class="list">'+gs.filter(g=>items.some(i=>i.group===gLabel(g,p))).map(g=>{
     const gi=items.filter(i=>i.group===gLabel(g,p));
-    return (gs.length>1||(g.owner==='me'&&un)?'<div class="grp"><span>'+esc(gLabel(g,p))+'</span><span class="num">'+doneOf(L,gi)+'/'+(gi.length+(g.owner==='me'?un:0))+'</span></div>':'')+gi.map(x=>{
+    return (gs.filter(g2=>items.some(i=>i.group===gLabel(g2,p))).length>1?'<div class="grp"><span>'+esc(gLabel(g,p))+'</span><span class="num">'+doneOf(L,gi)+'/'+gi.length+'</span></div>':'')+gi.map(x=>{
       const on=isChk(L,x);
       return '<button class="drill'+(on?' on':'')+'" data-act="chk" data-v="'+esc(x.key)+'"'+(fut?' disabled':'')+' aria-pressed="'+on+'"><span class="box">'+I.check+'</span><span><div class="nm">'+esc(x.name)+'</div>'+(x.desc?'<div class="ds">'+esc(x.desc)+'</div>':'')+'</span><span class="tg num">'+esc(x.target||'')+'</span></button>';
-    }).join('')+(g.owner==='me'&&un?ph(un):'');
-  }).join('')+'</div>';
-  if(un)h+='<div class="phcta">이름을 정하면 체크할 수 있어요. <button class="link" data-act="gotodrills">내 정보에서 정하기</button></div>';
-  if(fut){h+='<p class="status"><span class="dot"></span>아직 오지 않은 날이에요. 당일에 체크할 수 있어요.</p>';return h;}
-  h+=swingBox(d);
+    }).join('');
+  }).join('')+'</div>':'';
+  const addRow='<button class="addrow" data-act="gotodrills"><b>'+(has?'연습 항목 추가·수정':'+ 연습 항목 만들기')+'</b><span>'+(has?'':'필요할 때만')+'</span></button>';
+  if(fut){h+=list+'<p class="status"><span class="dot"></span>아직 오지 않은 날이에요. 당일에 체크하고 영상을 올릴 수 있어요.</p>';return h;}
+  h+=has?list+swingBox(d)+addRow:swingBox(d)+addRow;
   h+='<h2>오늘 연습 메모 <small>연결된 코치가 함께 봐요</small></h2><textarea data-field="memo" placeholder="잘된 점, 어려웠던 점, 컨디션">'+esc(L.memo||'')+'</textarea>';
   h+=fbHtml(fbsFor('log',logId(p,d),p));
   const cs=coachesOf(p);
