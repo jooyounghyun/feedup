@@ -276,7 +276,7 @@ const EX=[
   {id:'burpee',name:'버피',part:'전신',eq:'맨몸',lv:'중급',cardio:true,mus:[m('대퇴사두근',60,'보조'),m('대흉근',50,'보조')],pts:['푸시업 자세에서 일어나 점프','착지할 때 무릎을 살짝 굽혀요']}
 ];
 // 전용 일러스트가 있는 운동은 그림 파일(시작 → 끝 자세)을 보여 줘요. public/pt-img/<id>.png
-const PIMG=new Set(['squat','rdl','deadlift','goblet','legpress']);
+const PIMG=new Set(['squat','rdl','deadlift','goblet','legpress','lunge','bss','legext','legcurl','hipthrust','abduction','calfraise']);
 const figOf=(e,w,h)=>PIMG.has(e.id)?'<img class="pimg" src="/pt-img/'+e.id+'.png" width="'+(w||120)+'" height="'+(h||90)+'" alt="'+esc(e.name)+' 시작 자세와 끝 자세" loading="lazy" decoding="async">':svg(FIG[e.fig||PARTFIG[e.part]]||FIG.squat,w,h);
 
 /* ---------- 기본 ---------- */
