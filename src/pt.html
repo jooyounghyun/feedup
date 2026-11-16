@@ -671,7 +671,8 @@ function ovSets(o){
   h+='<div class="grid2" style="gap:8px"><div class="tile"><div class="k">지난 기록'+(prev?' '+md(prev.date):'')+'</div><div style="font-size:15px;font-weight:800;margin-top:2px">'+(prev?prev.sets[prev.sets.length-1].kg+'kg × '+prev.sets[prev.sets.length-1].reps+' × '+prev.sets.length:'처음이에요')+'</div></div><div class="tile"><div class="k">최고 중량</div><div style="font-size:15px;font-weight:800;margin-top:2px;color:'+A+'">'+(best?best+'kg':'–')+'</div></div></div>';
   const cur=it.sets.findIndex(s=>!s.done),nDone=it.sets.filter(s=>s.done).length;
   const same=it.sets.every(s=>(+s.kg||0)===(+it.sets[0].kg||0)&&(+s.reps||0)===(+it.sets[0].reps||0));
-  if(same&&!S.setDetail){
+  const simple=same&&!S.setDetail;
+  if(simple){
     const f=it.sets[0]||{kg:0,reps:10},n=Math.max(5,it.sets.length);
     h+='<div class="card pad scount"><div class="sc-in"><label><span>무게</span><input type="number" inputmode="decimal" step="0.5" data-f="kgAll" value="'+(f.kg||0)+'" aria-label="무게(kg)"><em>kg</em></label><b>×</b><label><span>횟수</span><input type="number" inputmode="numeric" data-f="repsAll" value="'+(f.reps||0)+'" aria-label="횟수"><em>회</em></label></div>'+
       '<div class="sc-q">몇 세트 했어요? <span class="num">'+nDone+' / '+it.sets.length+'세트</span></div>'+
@@ -686,7 +687,7 @@ function ovSets(o){
   h+='<div><span class="lbl">오늘 느낌</span><div class="grid2" style="grid-template-columns:repeat(4,minmax(0,1fr));gap:6px">'+['쉬움','적당','힘듦'].map(f=>'<button class="pill'+(l.feel===f?' on':'')+'" style="border-radius:10px" data-a="feel" data-v="'+f+'">'+f+'</button>').join('')+'<button class="pill" style="border-radius:10px;border-color:#F6C2B6;color:var(--bad)" data-a="open" data-v="pain" data-i="'+o.i+'">통증</button></div></div>';
   h+='<div><span class="lbl">자세 영상·사진 <span style="font-weight:500">(트레이너가 보고 피드백해요)</span></span>'+mediaGrid((l.media||[]).filter(x=>x.ex===it.ex),{ctx:'log',del:true,add:true,max:4,label:'자세 영상'})+'</div>';
   h+='<button class="btn ghost" style="color:var(--bad)" data-a="rmitem" data-v="'+o.i+'">이 운동 빼기</button>';
-  h+='</main><div class="foot"><button class="btn" data-a="nextset">'+(cur<0?'모든 세트 완료 · 닫기':(cur+1)+'세트 완료 · 휴식 시작')+'</button></div>';
+  h+='</main><div class="foot">'+(simple?'<button class="btn" data-a="setclose">'+(nDone?nDone+'세트 했어요 · 저장하고 닫기':'닫기')+'</button>':'<button class="btn" data-a="nextset">'+(cur<0?'모든 세트 완료 · 닫기':(cur+1)+'세트 완료 · 휴식 시작')+'</button>')+'</div>';
   return h;
 }
 let restEnd=0,restTimer=null;
@@ -1124,6 +1125,7 @@ document.addEventListener('click',async e=>{
     case'tick':{const [id,l]=curLog(),it=l.items[+v];if(!it)break;if(it.sets&&it.sets.length){const all=it.sets.every(s=>s.done);it.sets.forEach(s=>s.done=!all);}else it.done=!it.done;l.submitted=false;saveLog(id,l,true);render();break;}
     case'setdone':{const [id,l]=curLog(),it=l.items[top.i],s=it.sets[+v];s.done=!s.done;l.submitted=false;saveLog(id,l,true);if(s.done&&it.sets.some(x=>!x.done))startRest();render();break;}
     case'nextset':{const [id,l]=curLog(),it=l.items[top.i],j=it.sets.findIndex(s=>!s.done);if(j<0){pop();toast('수고했어요! '+exById(it.ex).name+' 완료');break;}it.sets[j].done=true;l.submitted=false;saveLog(id,l,true);if(it.sets.some(x=>!x.done))startRest();else{restEnd=0;toast('모든 세트 완료!');}render();break;}
+    case'setclose':{const [,l]=curLog(),it=l.items[top.i],k=it.sets.filter(x=>x.done).length;pop();if(k)toast(exById(it.ex).name+' '+k+'세트 저장했어요');break;}
     case'setcount':{const [id,l]=curLog(),it=l.items[top.i],N=+v,had=it.sets.filter(x=>x.done).length;const tgt=(N===had)?N-1:N;const last=it.sets[it.sets.length-1]||{kg:0,reps:10};while(it.sets.length<tgt)it.sets.push({kg:last.kg,reps:last.reps,done:false});it.sets.forEach((x,k)=>x.done=k<tgt);l.submitted=false;saveLog(id,l,true);if(tgt>had&&it.sets.some(x=>!x.done))startRest();else if(it.sets.every(x=>x.done)){restEnd=0;toast('모든 세트 완료!');}render();break;}
     case'setdetail':S.setDetail=!S.setDetail;render();break;
     case'addset':{const [id,l]=curLog(),it=l.items[top.i],last=it.sets[it.sets.length-1]||{kg:0,reps:10};it.sets.push({kg:last.kg,reps:last.reps,done:false});saveLog(id,l,true);render();break;}
