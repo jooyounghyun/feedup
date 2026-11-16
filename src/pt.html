@@ -273,10 +273,10 @@ const EX=[
   {id:'foam',name:'폼롤러 이완',part:'스트레칭',eq:'폼롤러',lv:'초급',cardio:true,mus:[]},
   {id:'hipst',name:'고관절 스트레칭',part:'스트레칭',eq:'맨몸',fig:'stretch',lv:'초급',cardio:true,mus:[]},
   {id:'kbswing',name:'케틀벨 스윙',part:'전신',eq:'케틀벨',lv:'중급',mus:[m('둔근',90,'주동'),m('햄스트링',80,'주동')],pts:['엉덩이를 뒤로 빼며 케틀벨을 다리 사이로','엉덩이 힘으로 가슴 높이까지 띄워요'],warn:'팔로 들어 올리지 않아요'},
-  {id:'burpee',name:'버피',part:'전신',eq:'맨몸',lv:'중급',cardio:true,mus:[m('대퇴사두근',60,'보조'),m('대흉근',50,'보조')],pts:['푸시업 자세에서 일어나 점프','착지할 때 무릎을 살짝 굽혀요']}
+  {id:'burpee',name:'버피',part:'전신',eq:'맨몸',lv:'중급',cardio:true,mus:[m('대퇴사두근',70,'주동'),m('대흉근',60,'주동'),m('복직근',50,'보조')],pts:['푸시업 자세에서 일어나 점프','착지할 때 무릎을 살짝 굽혀요']}
 ];
 // 전용 일러스트가 있는 운동은 그림 파일(시작 → 끝 자세)을 보여 줘요. public/pt-img/<id>.png
-const PIMG=new Set(['squat','rdl','deadlift','goblet','legpress','lunge','bss','legext','legcurl','hipthrust','abduction','calfraise','bench','incline','dbfly','chestpress','cablecross','pushup','dips','pulldown','pullup','row','onearmrow','seatedrow','backext','ohp','dbshoulder','lateral','reardelt','facepull','curl','hammer','pushdown','ohtricep','plank','sideplank','crunch','deadbug','russian','legraise','walk','bike','rower']);
+const PIMG=new Set(['squat','rdl','deadlift','goblet','legpress','lunge','bss','legext','legcurl','hipthrust','abduction','calfraise','bench','incline','dbfly','chestpress','cablecross','pushup','dips','pulldown','pullup','row','onearmrow','seatedrow','backext','ohp','dbshoulder','lateral','reardelt','facepull','curl','hammer','pushdown','ohtricep','plank','sideplank','crunch','deadbug','russian','legraise','walk','bike','rower','foam','hipst','kbswing','burpee']);
 const figOf=(e,w,h)=>PIMG.has(e.id)?'<img class="pimg" src="/pt-img/'+e.id+'.png" width="'+(w||120)+'" height="'+(h||90)+'" alt="'+esc(e.name)+' 시작 자세와 끝 자세" loading="lazy" decoding="async">':svg(FIG[e.fig||PARTFIG[e.part]]||FIG.squat,w,h);
 
 /* ---------- 기본 ---------- */
@@ -683,7 +683,7 @@ function ovPain(o){
 function ovDetail(o){
   const e=exById(o.i);
   let h='<div class="ebar"><button data-a="back">← 뒤로</button><span class="t">'+esc(e.part)+'</span><span style="min-width:44px"></span></div><main>';
-  if(PIMG.has(e.id))h+='<div class="grid2" style="gap:8px">'+[['1','1 · 시작 자세'],['2','2 · 끝 자세']].map(x=>'<div class="tile" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 6px 6px"><img class="pimg" src="/pt-img/'+e.id+'_'+x[0]+'.png" width="150" height="150" alt="'+esc(e.name+' '+x[1])+'"><span class="ds" style="font-weight:800">'+x[1]+'</span></div>').join('')+'</div>';
+  if(PIMG.has(e.id))h+='<div class="grid2" style="gap:8px'+(e.id==='burpee'?';grid-template-columns:repeat(3,1fr)':'')+'">'+(e.id==='burpee'?[['1','1 · 푸시업'],['2','2 · 웅크리기'],['3','3 · 점프']]:[['1','1 · 시작 자세'],['2','2 · 끝 자세']]).map(x=>'<div class="tile" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 6px 6px"><img class="pimg" src="/pt-img/'+e.id+'_'+x[0]+'.png" width="150" height="150" style="width:100%;max-width:150px;height:auto" alt="'+esc(e.name+' '+x[1])+'"><span class="ds" style="font-weight:800">'+x[1]+'</span></div>').join('')+'</div>';
   else if(e.id==='squat')h+='<div class="grid2" style="gap:8px">'+[['squatTop','1 · 시작 자세'],['squat','2 · 앉은 자세']].map(x=>'<div class="tile" style="display:flex;flex-direction:column;align-items:center;padding:8px 0 6px">'+svg(FIG[x[0]],150,112)+'<span class="ds" style="font-weight:800">'+x[1]+'</span></div>').join('')+'</div>';
   else if(!e.custom)h+='<div class="tile" style="display:flex;justify-content:center;padding:12px 0">'+figOf(e,220,165)+'</div>';
   h+='<div><div style="font-size:26px;font-weight:900;letter-spacing:-.03em">'+esc(e.name)+'</div><div class="pills" style="margin-top:6px">'+[e.part,e.eq,e.lv].filter(Boolean).map(t=>'<span class="badge b-gray">'+esc(t)+'</span>').join('')+'</div></div>';
