@@ -87,6 +87,21 @@ textarea:focus,.inp:focus{border-color:var(--ink)}
 .ov main{flex:1}
 .foot{padding:10px 16px calc(18px + env(safe-area-inset-bottom));position:sticky;bottom:0;background:#fff}
 .toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:12px;padding:11px 16px;font-size:14px;font-weight:700;z-index:50;max-width:88vw;text-align:center}
+.scount{display:flex;flex-direction:column;gap:14px}
+.sc-in{display:flex;align-items:flex-end;gap:10px}
+.sc-in label{flex:1;display:flex;flex-direction:column;gap:4px;position:relative}
+.sc-in span{font-size:12px;font-weight:700;color:var(--muted)}
+.sc-in input{height:52px;border:1.5px solid var(--line);border-radius:12px;padding:0 40px 0 14px;font-size:22px;font-weight:800;width:100%;font-family:inherit}
+.sc-in em{position:absolute;right:14px;bottom:15px;font-style:normal;font-size:14px;color:var(--muted);font-weight:700}
+.sc-in b{font-size:20px;color:var(--muted);padding-bottom:13px}
+.sc-q{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;font-weight:800}
+.sc-q span{font-size:13px;color:var(--muted);font-weight:700}
+.sc-ch{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.sc-ch button{height:52px;border-radius:14px;border:1.5px solid var(--line);font-size:19px;font-weight:900;background:#fff;color:var(--ink)}
+.sc-ch button.ex{border-style:dashed;color:var(--muted)}
+.sc-ch button.on{background:#1E5EFF;border-color:transparent;color:#fff}
+.sc-ch .pl{color:var(--muted);font-weight:700}
+.sc-more{font-size:13px;font-weight:700;color:var(--muted);text-align:left;padding:2px 0}
 .settbl .h,.settbl .r{display:grid;grid-template-columns:44px 1fr 1fr 52px;align-items:center;gap:6px;padding:8px 14px}
 .settbl .h{background:#F7F8FA;font-size:12px;font-weight:700;color:var(--muted)}
 .settbl .r{border-top:1px solid var(--line2)}
@@ -654,9 +669,19 @@ function ovSets(o){
   let prev=null,best=0;
   logsOf(ME).forEach(x=>{(x.items||[]).forEach(y=>{if(y.ex===it.ex&&y.sets){y.sets.forEach(s=>{if(s.done&&(+s.kg||0)>best)best=+s.kg;});if(!prev&&x.date<S.date&&y.sets.some(s=>s.done))prev={date:x.date,sets:y.sets.filter(s=>s.done)};}});});
   h+='<div class="grid2" style="gap:8px"><div class="tile"><div class="k">지난 기록'+(prev?' '+md(prev.date):'')+'</div><div style="font-size:15px;font-weight:800;margin-top:2px">'+(prev?prev.sets[prev.sets.length-1].kg+'kg × '+prev.sets[prev.sets.length-1].reps+' × '+prev.sets.length:'처음이에요')+'</div></div><div class="tile"><div class="k">최고 중량</div><div style="font-size:15px;font-weight:800;margin-top:2px;color:'+A+'">'+(best?best+'kg':'–')+'</div></div></div>';
-  const cur=it.sets.findIndex(s=>!s.done);
+  const cur=it.sets.findIndex(s=>!s.done),nDone=it.sets.filter(s=>s.done).length;
+  const same=it.sets.every(s=>(+s.kg||0)===(+it.sets[0].kg||0)&&(+s.reps||0)===(+it.sets[0].reps||0));
+  if(same&&!S.setDetail){
+    const f=it.sets[0]||{kg:0,reps:10},n=Math.max(5,it.sets.length);
+    h+='<div class="card pad scount"><div class="sc-in"><label><span>무게</span><input type="number" inputmode="decimal" step="0.5" data-f="kgAll" value="'+(f.kg||0)+'" aria-label="무게(kg)"><em>kg</em></label><b>×</b><label><span>횟수</span><input type="number" inputmode="numeric" data-f="repsAll" value="'+(f.reps||0)+'" aria-label="횟수"><em>회</em></label></div>'+
+      '<div class="sc-q">몇 세트 했어요? <span class="num">'+nDone+' / '+it.sets.length+'세트</span></div>'+
+      '<div class="sc-ch">'+Array.from({length:n},(_,k)=>'<button class="'+(k<nDone?'on':'')+(k>=it.sets.length?' ex':'')+'" data-a="setcount" data-v="'+(k+1)+'" aria-pressed="'+(k<nDone)+'" aria-label="'+(k+1)+'세트 했어요">'+(k+1)+'</button>').join('')+'<button class="pl" data-a="addset" aria-label="세트 추가">+</button></div>'+
+      '<button class="sc-more" data-a="setdetail">세트마다 무게·횟수가 달라요 ›</button></div>';
+  }else{
   h+='<div class="card settbl" style="overflow:hidden"><div class="h"><span>세트</span><span>무게 kg</span><span>횟수</span><span style="text-align:right">완료</span></div>'+it.sets.map((s,j)=>'<div class="r'+(j===cur?' cur':'')+'"><b class="num" style="font-size:18px">'+(j+1)+'</b><input type="number" inputmode="decimal" step="0.5" data-f="kg" data-i="'+j+'" value="'+s.kg+'" aria-label="'+(j+1)+'세트 무게"><input type="number" inputmode="numeric" data-f="reps" data-i="'+j+'" value="'+s.reps+'" aria-label="'+(j+1)+'세트 횟수"><span style="display:flex;justify-content:flex-end"><button class="ck'+(s.done?' on':'')+'" style="width:32px;height:32px;border-radius:9px" data-a="setdone" data-v="'+j+'" aria-label="'+(j+1)+'세트 완료">'+CHECK+'</button></span></div>').join('')+
-    '<div style="display:flex;border-top:1px solid var(--line2)"><button style="flex:1;padding:12px;font-size:13.5px;font-weight:700;color:var(--muted)" data-a="addset">+ 세트 추가</button>'+(it.sets.length>1?'<button style="flex:1;padding:12px;font-size:13.5px;font-weight:700;color:var(--muted);border-left:1px solid var(--line2)" data-a="rmset">− 마지막 세트 빼기</button>':'')+'</div></div>';
+      '<div style="display:flex;border-top:1px solid var(--line2)"><button style="flex:1;padding:12px;font-size:13.5px;font-weight:700;color:var(--muted)" data-a="addset">+ 세트 추가</button>'+(it.sets.length>1?'<button style="flex:1;padding:12px;font-size:13.5px;font-weight:700;color:var(--muted);border-left:1px solid var(--line2)" data-a="rmset">− 마지막 세트 빼기</button>':'')+'</div></div>';
+    if(same)h+='<button class="sc-more" style="align-self:flex-start" data-a="setdetail">간단히 보기 ›</button>';
+  }
   if(restEnd>Date.now())h+='<div class="timer"><div><div class="s">휴식 타이머</div><div class="v num" id="rest">'+fmtRest()+'</div></div><div style="display:flex;gap:6px"><button data-a="rest30">+30초</button><button class="w" data-a="restskip">건너뛰기</button></div></div>';
   h+='<div><span class="lbl">오늘 느낌</span><div class="grid2" style="grid-template-columns:repeat(4,minmax(0,1fr));gap:6px">'+['쉬움','적당','힘듦'].map(f=>'<button class="pill'+(l.feel===f?' on':'')+'" style="border-radius:10px" data-a="feel" data-v="'+f+'">'+f+'</button>').join('')+'<button class="pill" style="border-radius:10px;border-color:#F6C2B6;color:var(--bad)" data-a="open" data-v="pain" data-i="'+o.i+'">통증</button></div></div>';
   h+='<div><span class="lbl">자세 영상·사진 <span style="font-weight:500">(트레이너가 보고 피드백해요)</span></span>'+mediaGrid((l.media||[]).filter(x=>x.ex===it.ex),{ctx:'log',del:true,add:true,max:4,label:'자세 영상'})+'</div>';
@@ -1099,6 +1124,8 @@ document.addEventListener('click',async e=>{
     case'tick':{const [id,l]=curLog(),it=l.items[+v];if(!it)break;if(it.sets&&it.sets.length){const all=it.sets.every(s=>s.done);it.sets.forEach(s=>s.done=!all);}else it.done=!it.done;l.submitted=false;saveLog(id,l,true);render();break;}
     case'setdone':{const [id,l]=curLog(),it=l.items[top.i],s=it.sets[+v];s.done=!s.done;l.submitted=false;saveLog(id,l,true);if(s.done&&it.sets.some(x=>!x.done))startRest();render();break;}
     case'nextset':{const [id,l]=curLog(),it=l.items[top.i],j=it.sets.findIndex(s=>!s.done);if(j<0){pop();toast('수고했어요! '+exById(it.ex).name+' 완료');break;}it.sets[j].done=true;l.submitted=false;saveLog(id,l,true);if(it.sets.some(x=>!x.done))startRest();else{restEnd=0;toast('모든 세트 완료!');}render();break;}
+    case'setcount':{const [id,l]=curLog(),it=l.items[top.i],N=+v,had=it.sets.filter(x=>x.done).length;const tgt=(N===had)?N-1:N;const last=it.sets[it.sets.length-1]||{kg:0,reps:10};while(it.sets.length<tgt)it.sets.push({kg:last.kg,reps:last.reps,done:false});it.sets.forEach((x,k)=>x.done=k<tgt);l.submitted=false;saveLog(id,l,true);if(tgt>had&&it.sets.some(x=>!x.done))startRest();else if(it.sets.every(x=>x.done)){restEnd=0;toast('모든 세트 완료!');}render();break;}
+    case'setdetail':S.setDetail=!S.setDetail;render();break;
     case'addset':{const [id,l]=curLog(),it=l.items[top.i],last=it.sets[it.sets.length-1]||{kg:0,reps:10};it.sets.push({kg:last.kg,reps:last.reps,done:false});saveLog(id,l,true);render();break;}
     case'rmset':{const [id,l]=curLog(),it=l.items[top.i];if(it.sets.length>1)it.sets.pop();saveLog(id,l,true);render();break;}
     case'rmitem':{if(!confirm('이 운동을 오늘 목록에서 뺄까요?'))break;const [id,l]=curLog();l.items.splice(+v,1);saveLog(id,l,true);S.ov=[];render();break;}
@@ -1174,6 +1201,7 @@ document.addEventListener('input',e=>{
   if(f==='q'){S.q=el.value;const pos=el.selectionStart;render();const n=document.querySelector('#ov [data-f="q"]')||document.querySelector('[data-f="q"]');if(n){n.focus();try{n.setSelectionRange(pos,pos);}catch(x){}}return;}
   if(['name','email','pw','myname','joincode'].includes(f)){S.drafts[f]=el.value;return;}
   if(f==='ag-gname'){S.ag.gname=el.value;return;}if(f==='ag-gphone'){S.ag.gphone=el.value;return;}
+  if(f==='kgAll'||f==='repsAll'){const [id,l]=curLog();const it=l.items[top.i],k=f==='kgAll'?'kg':'reps';it.sets.forEach(x=>x[k]=+el.value||0);saveLog(id,l);return;}
   if(f==='kg'||f==='reps'){const [id,l]=curLog();const it=l.items[top.i];it.sets[+el.dataset.i][f]=+el.value||0;saveLog(id,l);return;}
   if(f==='note'){const [id,l]=curLog();l.items[top.i].note=el.value;saveLog(id,l);return;}
   if(f==='pmemo'){top.st.memo=el.value;return;}
